@@ -1,4 +1,4 @@
-package com.example.app
+package com.octarahq.trainflow
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

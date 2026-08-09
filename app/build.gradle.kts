@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.app"
+    namespace = "com.octarahq.trainflow"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.app"
+        applicationId = "com.octarahq.trainflow"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -34,14 +34,22 @@ android {
 }
 
 dependencies {
-    // Core & Activity Compose
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.0")
 
-    // Compose BOM (gère la cohérence des versions de Compose)
     val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
+}
+
+afterEvaluate {
+    tasks.named("installDebug") {
+        doLast {
+            exec {
+                commandLine("adb", "shell", "am", "start", "-n", "com.octarahq.trainflow/.MainActivity")
+            }
+        }
+    }
 }

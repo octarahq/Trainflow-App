@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MonProjet"
+rootProject.name = "Trainflow"
 include(":app")
