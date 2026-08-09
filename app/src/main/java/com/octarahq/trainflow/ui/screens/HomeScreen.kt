@@ -70,7 +70,11 @@ fun HomeScreen(
     onOpenSearch: () -> Unit = {}
 ) {
     BottomSheetScaffold(
-        scaffoldState = androidx.compose.material3.rememberBottomSheetScaffoldState(),
+        scaffoldState = androidx.compose.material3.rememberBottomSheetScaffoldState(
+            bottomSheetState = androidx.compose.material3.rememberStandardBottomSheetState(
+                initialValue = androidx.compose.material3.SheetValue.Expanded
+            )
+        ),
         sheetPeekHeight = 96.dp,
         sheetSwipeEnabled = true,
         sheetContainerColor = TrainflowPalette.panel,
