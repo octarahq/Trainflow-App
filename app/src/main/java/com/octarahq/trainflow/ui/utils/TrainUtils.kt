@@ -14,15 +14,20 @@ fun getTrainCategoryDisplay(key: String): TrainCategoryDisplay {
     val textSecondary = Color(0xFF94A3B8)
     
     return when (key.lowercase()) {
-        "fr:typeofproductcategory::highspeedrail::", "tgv" -> TrainCategoryDisplay("TGV", purple)
-        "fr:typeofproductcategory::regionalrail::", "ter" -> TrainCategoryDisplay("TER", teal)
-        "fr:typeofproductcategory::interregionalrail::", "intercités" -> TrainCategoryDisplay("Intercités", blue)
-        "fr:typeofproductcategory::suburbanrailway::", "rer" -> TrainCategoryDisplay("RER", pink)
-        "fr:typeofproductcategory::local::", "transilien" -> TrainCategoryDisplay("Transilien", activeGreen)
-        "fr:typeofproductcategory::tramtrain::", "tram" -> TrainCategoryDisplay("Tram-Train", delayAmber)
-        "fr:typeofproductcategory::longdistance::" -> TrainCategoryDisplay("Grandes Lignes", Color(0xFF6366F1))
-        "fr:typeofproductcategory::crosscountryrail::" -> TrainCategoryDisplay("Transversal", Color(0xFFF59E0B))
-        "fr:typeofproductcategory::railshuttle::", "navette" -> TrainCategoryDisplay("Navette", Color(0xFF14B8A6))
+        "fr:typeofproductcategory::highspeedrail::", "tgv", "highspeedrail" -> TrainCategoryDisplay("TGV", purple)
+        "fr:typeofproductcategory::regionalrail::", "ter", "regionalrail" -> TrainCategoryDisplay("TER", teal)
+        "fr:typeofproductcategory::interregionalrail::", "intercités", "interregionalrail" -> TrainCategoryDisplay("Intercités", blue)
+        "fr:typeofproductcategory::suburbanrailway::", "rer", "suburbanrailway",
+        "fr:typeofproductcategory::local::", "transilien", "local" -> TrainCategoryDisplay("RER", pink)
+        "fr:typeofproductcategory::tramtrain::", "tram", "tramtrain" -> TrainCategoryDisplay("Tram-Train", delayAmber)
+        "fr:typeofproductcategory::longdistance::", "longdistance" -> TrainCategoryDisplay("Grandes Lignes", Color(0xFF6366F1))
+        "fr:typeofproductcategory::crosscountryrail::", "crosscountryrail" -> TrainCategoryDisplay("Transversal", Color(0xFFF59E0B))
+        "fr:typeofproductcategory::railshuttle::", "navette", "railshuttle" -> TrainCategoryDisplay("Navette", Color(0xFF14B8A6))
+        "fr:typeofproductcategory::international::", "international" -> TrainCategoryDisplay("International", Color(0xFF8B5CF6))
+        "fr:typeofproductcategory::regionalcoach::", "regionalcoach" -> TrainCategoryDisplay("Car Régional", Color(0xFF059669))
+        "fr:typeofproductcategory::localbus::", "localbus" -> TrainCategoryDisplay("Bus Local", Color(0xFF0284C7))
+        "fr:typeofproductcategory::railreplacementcoach::", "railreplacementcoach" -> TrainCategoryDisplay("Car de Remplacement", Color(0xFFDC2626))
+        "rail", "train" -> TrainCategoryDisplay("Train", textSecondary)
         else -> {
             val shortName = key.removePrefix("fr:typeofproductcategory::").removeSuffix("::").replaceFirstChar { it.uppercase() }
             TrainCategoryDisplay(shortName.ifEmpty { "Train" }, textSecondary)
@@ -146,7 +151,7 @@ fun buildTimeline(train: com.octarahq.trainflow.InterpolatedJourney): List<Timel
     }
 
     val currentIndex = rawStops.indexOfFirst { it.ref == nextStopId }
-    val lastIndex = rawStops.indexOfFirst { it.ref == lastStopId }
+    val lastIndex = rawStops.indexOfFirst { it.ref == lastStopId  }
 
     val absoluteProgress = if (lastIndex >= 0) lastIndex + ratio else 0f
 

@@ -63,6 +63,9 @@ fun MainScreen() {
                         },
                         onOpenSearch = {
                             navController.navigate(Screen.Search.route) { launchSingleTop = true }
+                        },
+                        onOpenTrainInfo = { trainId, speedKmh ->
+                            navController.navigate(Screen.TrainInfo.createRoute(trainId, speedKmh)) { launchSingleTop = true }
                         }
                     )
                 }
@@ -77,7 +80,6 @@ fun MainScreen() {
                             navController.navigate(Screen.Search.route) { launchSingleTop = true }
                         },
                         onOpenTrainInfo = {
-                            navController.navigate(Screen.TrainInfo.route) { launchSingleTop = true }
                         }
                     )
                 }
@@ -85,13 +87,26 @@ fun MainScreen() {
                     SearchScreen(
                         onBack = { navController.popBackStack() },
                         onOpenTrainInfo = {
-                            navController.navigate(Screen.TrainInfo.route) { launchSingleTop = true }
                         }
                     )
                 }
                 composable(Screen.Alerts.route) { AlertsScreen() }
-                composable(Screen.TrainInfo.route) {
+                composable(
+                    route = Screen.TrainInfo.route,
+                    arguments = listOf(
+                        androidx.navigation.navArgument("trainId") { type = androidx.navigation.NavType.StringType },
+                        androidx.navigation.navArgument("speed") {
+                            type = androidx.navigation.NavType.IntType
+                            defaultValue = -1
+                        }
+                    )
+                ) { backStackEntry ->
+                    val trainId = backStackEntry.arguments?.getString("trainId") ?: ""
+                    val speedVal = backStackEntry.arguments?.getInt("speed") ?: -1
+                    val speed = if (speedVal != -1) speedVal else null
                     TrainInfoScreen(
+                        trainId = trainId,
+                        speedKmh = speed,
                         onBack = {
                             navController.popBackStack()
                         }

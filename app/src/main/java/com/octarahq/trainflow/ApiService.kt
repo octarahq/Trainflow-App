@@ -41,7 +41,14 @@ interface ApiService {
     ): SearchResponse
     @GET("/live/vehicles")
     suspend fun getLiveVehicles(): LiveVehiclesResponse
+
+    @retrofit2.http.GET("/live/vehicle/{id}")
+    suspend fun getSingleVehicle(@retrofit2.http.Path("id") id: String): SingleVehicleResponse
 }
+
+data class SingleVehicleResponse(
+    val vehicle: InterpolatedJourney
+)
 
 data class LiveVehiclesResponse(
     val count: Int,
@@ -56,13 +63,58 @@ data class InterpolatedJourney(
     val nextStopId: String,
     val ratio: Double,
     val lat: Double,
-    val lon: Double
+    val lon: Double,
+    val speed: Int? = null
+)
+
+data class FramedVehicleJourneyRef(
+    val DatedVehicleJourneyRef: String
+)
+
+data class TrainNumbers(
+    val TrainNumberRef: String
+)
+
+data class RecordedCall(
+    val StopPointRef: String,
+    val StopPointName: String,
+    val AimedArrivalTime: String?,
+    val ExpectedArrivalTime: String?,
+    val ArrivalPlatformName: String?,
+    val AimedDepartureTime: String?,
+    val ExpectedDepartureTime: String?,
+    val DeparturePlatformName: String?
+)
+
+data class RecordedCalls(
+    val RecordedCall: List<RecordedCall>?
+)
+
+data class EstimatedCall(
+    val StopPointRef: String,
+    val StopPointName: String,
+    val AimedArrivalTime: String?,
+    val ExpectedArrivalTime: String?,
+    val ArrivalPlatformName: String?,
+    val AimedDepartureTime: String?,
+    val ExpectedDepartureTime: String?
+)
+
+data class EstimatedCalls(
+    val EstimatedCall: List<EstimatedCall>?
 )
 
 data class TrainJourney(
     val PublishedLineName: String,
     val ProductCategoryRef: String,
-    val VehicleMode: String
+    val VehicleMode: String,
+    val VehicleJourneyRef: String,
+    val OriginName: String,
+    val DestinationName: String,
+    val FramedVehicleJourneyRef: FramedVehicleJourneyRef?,
+    val TrainNumbers: TrainNumbers?,
+    val RecordedCalls: RecordedCalls?,
+    val EstimatedCalls: EstimatedCalls?
 )
 
 data class SearchResponse(

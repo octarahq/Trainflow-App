@@ -172,8 +172,6 @@ fun TrainflowMap(
     var lastAnimatedTrainId by remember { mutableStateOf<String?>(null) }
     var frameTrigger by remember { mutableStateOf(0L) }
 
-    // Always-running 60fps ticker so the Canvas redraws every frame,
-    // regardless of whether a train is selected or the user is panning.
     LaunchedEffect(Unit) {
         while (true) {
             frameTrigger = System.currentTimeMillis()
@@ -209,7 +207,6 @@ fun TrainflowMap(
             kotlinx.coroutines.delay(1000)
         }
         
-        // Camera-follow loop: only moves the camera, frameTrigger is handled separately
         while (true) {
             if (isCameraLocked && (mapLibreMap?.cameraPosition?.zoom ?: 0.0) >= 10.0) {
                 val currentTime = System.currentTimeMillis()

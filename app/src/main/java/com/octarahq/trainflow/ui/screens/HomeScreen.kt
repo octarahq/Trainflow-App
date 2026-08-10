@@ -1,9 +1,17 @@
 package com.octarahq.trainflow.ui.screens
 
+import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,14 +22,27 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,13 +71,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.times
 
 private object TrainflowPalette {
@@ -79,12 +97,16 @@ private object TrainflowPalette {
 @Composable
 fun HomeScreen(
     onOpenMenu: () -> Unit = {},
-    onOpenSearch: () -> Unit = {}
+    onOpenSearch: () -> Unit = {},
+    onOpenTrainInfo: (String, Int?) -> Unit = { _, _ -> }
 ) {
     var networkStatus by remember { mutableStateOf<NetworkStatusStats?>(null) }
     var liveVehicles by remember { mutableStateOf<List<InterpolatedJourney>>(emptyList()) }
+    var selectedTrain by remember { mutableStateOf<InterpolatedJourney?>(null) }
+    val trainTrackingData = remember { androidx.compose.runtime.mutableStateMapOf<String, com.octarahq.trainflow.ui.utils.TrainTrackingData>() }
     val scope = rememberCoroutineScope()
     var interactionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var selectedCategoryLabels by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -102,6 +124,19 @@ fun HomeScreen(
         while (true) {
             try {
                 val response = ApiClient.apiService.getLiveVehicles()
+                val currentTime = System.currentTimeMillis()
+                response.vehicles.forEach { train ->
+                    val smartId = train.journey.FramedVehicleJourneyRef?.DatedVehicleJourneyRef 
+                        ?: train.journey.TrainNumbers?.TrainNumberRef 
+                        ?: train.journey.VehicleJourneyRef
+                        ?: return@forEach
+                    
+                    val oldData = trainTrackingData[smartId]
+                    val newData = com.octarahq.trainflow.ui.utils.calculateTrackingData(oldData, train.lat, train.lon, currentTime)
+                    if (newData != null) {
+                        trainTrackingData[smartId] = newData
+                    }
+                }
                 liveVehicles = response.vehicles
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -117,6 +152,18 @@ fun HomeScreen(
         )
     )
 
+    var isCameraLocked by remember { mutableStateOf(false) }
+    var showOnlySelected by remember { mutableStateOf(false) }
+
+    LaunchedEffect(selectedTrain) {
+        if (selectedTrain != null) {
+            isCameraLocked = true
+        } else {
+            isCameraLocked = false
+            showOnlySelected = false
+        }
+    }
+
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = 96.dp,
@@ -124,7 +171,18 @@ fun HomeScreen(
         sheetContainerColor = TrainflowPalette.panel,
         sheetShadowElevation = 12.dp,
         sheetContent = {
-            HomeBottomSheet(onOpenSearch = onOpenSearch, stats = networkStatus)
+            HomeBottomSheet(
+                onOpenSearch = onOpenSearch,
+                stats = networkStatus,
+                selectedCategoryLabels = selectedCategoryLabels,
+                onCategoryToggle = { label ->
+                    selectedCategoryLabels = when {
+                        selectedCategoryLabels.size == 1 && selectedCategoryLabels.contains(label) -> emptySet()
+                        selectedCategoryLabels.contains(label) -> selectedCategoryLabels - label
+                        else -> if (selectedCategoryLabels.isEmpty()) setOf(label) else selectedCategoryLabels + label
+                    }
+                }
+            )
         }
     ) {
         Box(
@@ -132,18 +190,45 @@ fun HomeScreen(
                 .fillMaxSize()
                 .background(TrainflowPalette.background)
         ) {
+            val filteredVehicles = when {
+                showOnlySelected && selectedTrain != null ->
+                    liveVehicles.filter {
+                        it.journey.VehicleJourneyRef == selectedTrain?.journey?.VehicleJourneyRef ||
+                        it.journey.FramedVehicleJourneyRef?.DatedVehicleJourneyRef == selectedTrain?.journey?.FramedVehicleJourneyRef?.DatedVehicleJourneyRef
+                    }
+                selectedCategoryLabels.isNotEmpty() ->
+                    liveVehicles.filter {
+                        val ref = it.journey.ProductCategoryRef.ifBlank { it.journey.VehicleMode }
+                        val label = getTrainCategoryDisplay(ref.lowercase()).label
+                        selectedCategoryLabels.contains(label)
+                    }
+                else -> liveVehicles
+            }
             TrainflowMap(
-                trains = liveVehicles,
+                trains = filteredVehicles,
+                trackingData = trainTrackingData,
+                selectedTrain = selectedTrain,
+                isCameraLocked = isCameraLocked,
+                onCameraLockChange = { isCameraLocked = it },
                 onMapInteract = {
-                    interactionJob?.cancel()
-                    scope.launch {
-                        if (scaffoldState.bottomSheetState.currentValue != androidx.compose.material3.SheetValue.Hidden) {
-                            scaffoldState.bottomSheetState.hide()
+                    if (selectedTrain == null) {
+                        interactionJob?.cancel()
+                        scope.launch {
+                            if (scaffoldState.bottomSheetState.currentValue != androidx.compose.material3.SheetValue.Hidden) {
+                                scaffoldState.bottomSheetState.hide()
+                            }
+                        }
+                        interactionJob = scope.launch {
+                            kotlinx.coroutines.delay(1000)
+                            scaffoldState.bottomSheetState.partialExpand()
                         }
                     }
-                    interactionJob = scope.launch {
-                        kotlinx.coroutines.delay(1000)
-                        scaffoldState.bottomSheetState.partialExpand()
+                },
+                onTrainClick = { train ->
+                    selectedTrain = train
+                    interactionJob?.cancel()
+                    scope.launch {
+                        scaffoldState.bottomSheetState.hide()
                     }
                 }
             )
@@ -152,101 +237,270 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
-                onOpenMenu = onOpenMenu
+                isBack = selectedTrain != null,
+                onOpenMenu = {
+                    if (selectedTrain != null) {
+                        selectedTrain = null
+                        scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+                    } else {
+                        onOpenMenu()
+                    }
+                }
             )
+
+            if (selectedTrain != null) {
+                androidx.activity.compose.BackHandler {
+                    selectedTrain = null
+                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+                }
+            }
+            
+            var lastTrain by remember { mutableStateOf<InterpolatedJourney?>(null) }
+            LaunchedEffect(selectedTrain) {
+                if (selectedTrain != null) lastTrain = selectedTrain
+            }
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = selectedTrain != null,
+                    enter = androidx.compose.animation.slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    ) + androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(300)),
+                    exit = androidx.compose.animation.slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = androidx.compose.animation.core.tween(250)
+                    ) + androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(250))
+                ) {
+                    lastTrain?.let { train ->
+                        val smartId = train.journey.FramedVehicleJourneyRef?.DatedVehicleJourneyRef 
+                            ?: train.journey.TrainNumbers?.TrainNumberRef 
+                            ?: train.journey.VehicleJourneyRef
+                        val speedKmh = train.speed ?: smartId?.let { trainTrackingData[it]?.speedKmh }
+                        TrainDetailOverlay(
+                            train = train,
+                            speedKmh = speedKmh,
+                            isCameraLocked = isCameraLocked,
+                            showOnlySelected = showOnlySelected,
+                            onCameraLockChange = { isCameraLocked = it },
+                            onShowOnlySelectedChange = { showOnlySelected = it },
+                            onOpenTrainInfo = {
+                                if (smartId != null) {
+                                    onOpenTrainInfo(smartId, speedKmh)
+                                }
+                            },
+                            onClose = { selectedTrain = null },
+                            modifier = Modifier.padding(12.dp).padding(bottom = 12.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun TrainflowMapBackground(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-
-        listOf(0.0f, 0.1367f, 0.2735f, 0.4103f, 0.5471f, 0.6839f, 0.8206f).forEach { fraction ->
-            drawLine(
-                color = Color(0xFF1B2331).copy(alpha = 0.48f),
-                start = Offset(0f, height * fraction),
-                end = Offset(width, height * fraction),
-                strokeWidth = 1.2f
+fun TrainDetailOverlay(
+    train: InterpolatedJourney, 
+    speedKmh: Int? = null, 
+    isCameraLocked: Boolean = false,
+    showOnlySelected: Boolean = false,
+    onCameraLockChange: (Boolean) -> Unit = {},
+    onShowOnlySelectedChange: (Boolean) -> Unit = {},
+    onOpenTrainInfo: () -> Unit = {},
+    onClose: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = TrainflowPalette.surface),
+        border = BorderStroke(1.dp, TrainflowPalette.border),
+        elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 8.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                var dragY = 0f
+                detectVerticalDragGestures(
+                    onDragEnd = { dragY = 0f },
+                    onDragCancel = { dragY = 0f },
+                    onVerticalDrag = { change, dragAmount ->
+                        dragY += dragAmount
+                        if (dragY > 150f) {
+                            onClose()
+                            dragY = 0f
+                        }
+                    }
+                )
+            }
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .background(Color(0xFF4B5563), CircleShape)
+                    .align(Alignment.CenterHorizontally)
             )
-        }
+            Spacer(modifier = Modifier.height(16.dp))
 
-        listOf(0.1990f, 0.3980f, 0.5970f, 0.7960f).forEach { fraction ->
-            drawLine(
-                color = Color(0xFF1B2331).copy(alpha = 0.48f),
-                start = Offset(width * fraction, 0f),
-                end = Offset(width * fraction, height),
-                strokeWidth = 1.2f
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val category = getTrainCategoryDisplay(train.journey.ProductCategoryRef)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .background(category.color, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = category.label.uppercase(),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = train.journey.PublishedLineName,
+                        color = TrainflowPalette.textPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                
+                val delayText = if ((train.delayMinutes ?: 0) > 0) "+${train.delayMinutes} min" else "À l'heure"
+                val statusColor = if ((train.delayMinutes ?: 0) > 0) TrainflowPalette.delayAmber else TrainflowPalette.punctualGreen
+                
+                Box(
+                    modifier = Modifier
+                        .background(statusColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = delayText,
+                        color = statusColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            val nextStop = com.octarahq.trainflow.ui.utils.getNextStopInfo(train)
+            val destInfo = com.octarahq.trainflow.ui.utils.getDestinationInfo(train)
+            val stopName = nextStop?.name ?: train.journey.DestinationName
+            val arrivalText = if (destInfo != null) {
+                val voie = destInfo.platform?.let { " (voie $it)" } ?: ""
+                "Arrivée prévue à ${destInfo.timeFormatted}$voie"
+            } else {
+                "Destination : ${train.journey.DestinationName}"
+            }
+            val stopTitle = if (nextStop != null) {
+                "PROCHAIN ARRÊT (${maxOf(0, nextStop.minutes)} min)"
+            } else {
+                "PROCHAIN ARRÊT"
+            }
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("VITESSE", color = TrainflowPalette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    val speedText = speedKmh?.let { "$it km/h" } ?: "En route"
+                    Text(speedText, color = TrainflowPalette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stopTitle, color = TrainflowPalette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(stopName, color = TrainflowPalette.blue, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = arrivalText,
+                color = TrainflowPalette.textSecondary,
+                fontSize = 14.sp
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OverlayActionButton(
+                    icon = Icons.Filled.LocationOn,
+                    label = if (isCameraLocked) "Ne plus suivre" else "Suivre",
+                    modifier = Modifier.weight(1f).clickable { onCameraLockChange(!isCameraLocked) }
+                )
+                OverlayActionButton(
+                    icon = Icons.Filled.Info,
+                    label = if (showOnlySelected) "Tout afficher" else "Afficher seul",
+                    modifier = Modifier.weight(1f).clickable { onShowOnlySelectedChange(!showOnlySelected) }
+                )
+                OverlayActionButton(
+                    icon = Icons.Filled.Notifications,
+                    label = "Notification",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, TrainflowPalette.border, RoundedCornerShape(16.dp))
+                    .clickable { onOpenTrainInfo() }
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Voir détails",
+                    color = TrainflowPalette.blue,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = TrainflowPalette.blue,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
+            }
         }
+    }
+}
 
-        drawLine(
-            color = TrainflowPalette.blue,
-            start = Offset(width * 0.099f, height * 0.171f),
-            end = Offset(width * 0.973f, height * 0.574f),
-            strokeWidth = 2.6f
-        )
-        drawCircle(
-            color = TrainflowPalette.blue,
-            radius = width * 0.015f,
-            center = Offset(width * 0.100f, height * 0.170f),
-            style = Stroke(width = 2.4f)
-        )
-        drawCircle(
-            color = TrainflowPalette.activeGreen,
-            radius = width * 0.015f,
-            center = Offset(width * 0.375f, height * 0.306f)
-        )
-        drawCircle(
-            color = Color(0xFF10B981),
-            radius = width * 0.010f,
-            center = Offset(width * 0.627f, height * 0.414f),
-            style = Stroke(width = 2.2f)
-        )
-        drawCircle(
-            color = TrainflowPalette.blue,
-            radius = width * 0.016f,
-            center = Offset(width * 0.903f, height * 0.553f),
-            style = Stroke(width = 2.4f)
-        )
-
-        drawLine(
-            color = Color(0xFF0E7D57),
-            start = Offset(width * 0.024f, height * 0.682f),
-            end = Offset(width * 0.493f, height * 0.114f),
-            strokeWidth = 2.6f
-        )
-        drawLine(
-            color = Color(0xFFB7791F),
-            start = Offset(width * 0.000f, height * 0.684f),
-            end = Offset(width * 0.927f, height * 0.573f),
-            strokeWidth = 2.6f
-        )
-
-        drawCircle(
-            color = Color(0xFFFBBF24),
-            radius = width * 0.018f,
-            center = Offset(width * 0.586f, height * 0.512f),
-            style = Stroke(width = 2.6f)
-        )
-        drawCircle(
-            color = Color(0xFF0B8F6A),
-            radius = width * 0.013f,
-            center = Offset(width * 0.02f, height * 0.684f)
-        )
-        drawCircle(
-            color = Color(0xFF34D399),
-            radius = width * 0.022f,
-            center = Offset(width * 0.375f, height * 0.304f)
-        )
+@Composable
+fun OverlayActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(TrainflowPalette.panel, RoundedCornerShape(16.dp))
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = TrainflowPalette.textPrimary, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = label, color = TrainflowPalette.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 private fun HomeTopControls(
     modifier: Modifier = Modifier,
+    isBack: Boolean = false,
     onOpenMenu: () -> Unit
 ) {
     Row(
@@ -256,8 +510,8 @@ private fun HomeTopControls(
     ) {
         FloatingControlButton(onClick = onOpenMenu) {
             Icon(
-                imageVector = Icons.Filled.Menu,
-                contentDescription = "Menu",
+                imageVector = if (isBack) Icons.Filled.ArrowBack else Icons.Filled.Menu,
+                contentDescription = if (isBack) "Back" else "Menu",
                 tint = TrainflowPalette.textPrimary,
                 modifier = Modifier.size(24.dp)
             )
@@ -304,7 +558,9 @@ private fun FloatingControlButton(
 @Composable
 private fun HomeBottomSheet(
     onOpenSearch: () -> Unit,
-    stats: NetworkStatusStats?
+    stats: NetworkStatusStats?,
+    selectedCategoryLabels: Set<String> = emptySet(),
+    onCategoryToggle: (String) -> Unit = {}
 ) {
     val actifs = stats?.inTransit?.toString() ?: "--"
     val ponctuels = stats?.punctuality?.let { "$it%" } ?: "--%"
@@ -398,17 +654,33 @@ private fun HomeBottomSheet(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val counts = stats?.trainCounts?.toList()?.sortedByDescending { it.second } ?: emptyList()
+                    val mergedCounts = linkedMapOf<String, Pair<Int, androidx.compose.ui.graphics.Color>>()
+                    stats?.trainCounts?.forEach { (key, count) ->
+                        val display = getTrainCategoryDisplay(key.lowercase())
+                        val existing = mergedCounts[display.label]
+                        mergedCounts[display.label] = Pair(
+                            (existing?.first ?: 0) + count,
+                            display.color
+                        )
+                    }
+                    val counts = mergedCounts.entries.sortedByDescending { it.value.first }
                     val chunks = counts.chunked(3)
-                    
+
                     chunks.forEach { chunk ->
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            chunk.forEach { (key, count) ->
-                                val display = getTrainCategoryDisplay(key)
-                                BreakdownChip(label = display.label, value = count.toString(), badgeColor = display.color)
+                            chunk.forEach { (label, countAndColor) ->
+                                val isActive = selectedCategoryLabels.isEmpty() || selectedCategoryLabels.contains(label)
+                                BreakdownChip(
+                                    label = label,
+                                    value = countAndColor.first.toString(),
+                                    badgeColor = countAndColor.second,
+                                    isActive = isActive,
+                                    onClick = { onCategoryToggle(label) },
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                         }
                     }
@@ -462,35 +734,47 @@ private fun StatCard(
 private fun BreakdownChip(
     label: String,
     value: String,
-    badgeColor: Color
+    badgeColor: Color,
+    isActive: Boolean = true,
+    onClick: () -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
+    val chipAlpha = if (isActive) 1f else 0.35f
+    val borderColor = if (isActive) TrainflowPalette.border else TrainflowPalette.border.copy(alpha = 0.3f)
+
     Surface(
-        color = TrainflowPalette.surface,
+        color = TrainflowPalette.surface.copy(alpha = chipAlpha),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, TrainflowPalette.border)
+        border = BorderStroke(1.dp, borderColor),
+        modifier = modifier.clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                color = badgeColor,
-                shape = RoundedCornerShape(6.dp)
+                color = badgeColor.copy(alpha = chipAlpha),
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.wrapContentHeight()
             ) {
                 Text(
                     text = label,
-                    color = Color.White.copy(alpha = 0.93f),
-                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = if (isActive) 0.93f else 0.4f),
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
             Text(
                 text = value,
-                color = TrainflowPalette.textPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
+                color = TrainflowPalette.textPrimary.copy(alpha = chipAlpha),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
