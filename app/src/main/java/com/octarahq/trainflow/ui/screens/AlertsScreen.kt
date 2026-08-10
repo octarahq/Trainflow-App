@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Info
@@ -23,18 +25,27 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.BasicTextField
@@ -55,167 +66,256 @@ private object AlertsPalette {
 }
 
 private data class DelayedTrain(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val type: String,
     val typeColor: Color,
     val typeTextColor: Color,
     val number: String,
     val delay: String,
+    val delayMinutes: Int,
     val delayColor: Color,
     val delayBgColor: Color,
     val origin: String,
     val destination: String,
-    val reason: String
 )
 
+private enum class SortOption(val label: String) {
+    DELAY_DESC("Plus gros retard"),
+    DELAY_ASC("Moins de retard"),
+    NUMBER_ASC("Numéro de train"),
+    ORIGIN_ASC("Gare de départ")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlertsScreen() {
     var isSearchExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var showSortMenu by remember { mutableStateOf(false) }
+    var sortOption by remember { mutableStateOf(SortOption.DELAY_DESC) }
 
-    val allDelayedTrains = listOf(
-        DelayedTrain(
-            type = "TGV",
-            typeColor = AlertsPalette.purple,
-            typeTextColor = Color.White,
-            number = "6231",
-            delay = "+12 min",
-            delayColor = AlertsPalette.amber,
-            delayBgColor = Color(0xFF451A03),
-            origin = "Paris Gare de Lyon",
-            destination = "Marseille St-Charles",
-            reason = "Panne de signalisation"
-        ),
-        DelayedTrain(
-            type = "TER",
-            typeColor = AlertsPalette.teal,
-            typeTextColor = Color.White,
-            number = "86509",
-            delay = "+25 min",
-            delayColor = AlertsPalette.amber,
-            delayBgColor = Color(0xFF451A03),
-            origin = "Bordeaux Saint-Jean",
-            destination = "Toulouse Matabiau",
-            reason = "Difficultés de raccordement"
-        ),
-        DelayedTrain(
-            type = "Intercités",
-            typeColor = AlertsPalette.blue,
-            typeTextColor = Color.White,
-            number = "4402",
-            delay = "+45 min",
-            delayColor = AlertsPalette.red,
-            delayBgColor = Color(0xFF7F1D1D),
-            origin = "Paris Austerlitz",
-            destination = "Limoges Bénédictins",
-            reason = "Incident technique sur la voie"
-        )
-    )
+    var allDelayedTrains by remember { mutableStateOf<List<DelayedTrain>>(emptyList()) }
+    var currentStats by remember { mutableStateOf<com.octarahq.trainflow.NetworkStatusStats?>(null) }
+    
+    var page by remember { mutableStateOf(1) }
+    var isLoading by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var hasMore by remember { mutableStateOf(true) }
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            page = 1
+            hasMore = true
+            isRefreshing = true
+        }
+    }
+
+    LaunchedEffect(page) {
+        isLoading = true
+        try {
+            val networkStatus = com.octarahq.trainflow.ApiClient.apiService.getNetworkStatus(page = page, pageSize = 10)
+            currentStats = networkStatus.stats
+            
+            val newTrains = networkStatus.delayedTrains.map { train ->
+                DelayedTrain(
+                    type = when {
+                        train.type.contains("suburban") -> "RER/Transilien"
+                        train.type.contains("regional") -> "TER"
+                        train.type.contains("highspeedrail") -> "TGV"
+                        train.type.contains("longdistance") -> "Longue distance"
+                        train.type.contains("local") -> "Local"
+                        else -> train.type
+                    },
+                    typeColor = AlertsPalette.blue,
+                    typeTextColor = Color.White,
+                    number = train.number,
+                    delay = "+${train.delayMinutes} min",
+                    delayMinutes = train.delayMinutes,
+                    delayColor = AlertsPalette.amber,
+                    delayBgColor = Color(0xFF451A03),
+                    origin = train.origin,
+                    destination = train.destination,
+                )
+            }
+            
+            if (newTrains.isEmpty()) {
+                hasMore = false
+            }
+
+            if (page == 1) {
+                allDelayedTrains = newTrains
+            } else {
+                allDelayedTrains = allDelayedTrains.plus(newTrains)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            isLoading = false
+            if (isRefreshing) {
+                isRefreshing = false
+                pullToRefreshState.endRefresh()
+            }
+        }
+    }
+
+    val filteredTrains = allDelayedTrains.filter { 
+        it.number.contains(searchQuery, ignoreCase = true) ||
+        it.type.contains(searchQuery, ignoreCase = true) ||
+        it.origin.contains(searchQuery, ignoreCase = true) ||
+        it.destination.contains(searchQuery, ignoreCase = true)
+    }
+
+    val sortedTrains = when (sortOption) {
+        SortOption.DELAY_DESC -> filteredTrains.sortedByDescending { it.delayMinutes }
+        SortOption.DELAY_ASC -> filteredTrains.sortedBy { it.delayMinutes }
+        SortOption.NUMBER_ASC -> filteredTrains.sortedBy { it.number }
+        SortOption.ORIGIN_ASC -> filteredTrains.sortedBy { it.origin }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(AlertsPalette.background)
+            .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 24.dp)
-                .padding(bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 24.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            AlertsStatsRow()
+            item { AlertsStatsRow(currentStats) }
             
-            if (isSearchExpanded) {
-                Surface(
-                    color = AlertsPalette.surface,
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AlertsPalette.border),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            item {
+                if (isSearchExpanded) {
+                    Surface(
+                        color = AlertsPalette.surface,
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AlertsPalette.border),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Filled.Search, contentDescription = null, tint = AlertsPalette.textSecondary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                textStyle = TextStyle(color = AlertsPalette.textPrimary, fontSize = 16.sp),
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                decorationBox = { innerTextField ->
+                                    if (searchQuery.isEmpty()) {
+                                        Text("Rechercher (numéro, gare, type)...", color = AlertsPalette.textSecondary, fontSize = 16.sp)
+                                    }
+                                    innerTextField()
+                                }
+                            )
+                            IconButton(
+                                onClick = { 
+                                    isSearchExpanded = false
+                                    searchQuery = ""
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(imageVector = Icons.Filled.Close, contentDescription = "Fermer", tint = AlertsPalette.textSecondary, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                } else {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(imageVector = Icons.Filled.Search, contentDescription = null, tint = AlertsPalette.textSecondary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            textStyle = TextStyle(color = AlertsPalette.textPrimary, fontSize = 16.sp),
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            decorationBox = { innerTextField ->
-                                if (searchQuery.isEmpty()) {
-                                    Text("Chercher un numéro de train...", color = AlertsPalette.textSecondary, fontSize = 16.sp)
-                                }
-                                innerTextField()
-                            }
+                        Text(
+                            text = "${currentStats?.delays ?: 0} Trains en retard",
+                            color = AlertsPalette.textPrimary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                        IconButton(
-                            onClick = { 
-                                isSearchExpanded = false
-                                searchQuery = ""
-                            },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(imageVector = Icons.Filled.Close, contentDescription = "Fermer", tint = AlertsPalette.textSecondary, modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "23 Trains en retard",
-                        color = AlertsPalette.textPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        IconButton(onClick = { /* TODO: Trier */ }) {
-                            Icon(
-                                imageVector = Icons.Filled.List,
-                                contentDescription = "Trier",
-                                tint = AlertsPalette.textSecondary
-                            )
-                        }
-                        IconButton(onClick = { isSearchExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = "Rechercher",
-                                tint = AlertsPalette.textSecondary
-                            )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box {
+                                IconButton(onClick = { showSortMenu = true }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.List,
+                                        contentDescription = "Trier",
+                                        tint = AlertsPalette.textSecondary
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showSortMenu,
+                                    onDismissRequest = { showSortMenu = false },
+                                    modifier = Modifier.background(AlertsPalette.panel)
+                                ) {
+                                    SortOption.values().forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option.label, color = if (option == sortOption) AlertsPalette.blue else AlertsPalette.textPrimary) },
+                                            onClick = {
+                                                sortOption = option
+                                                showSortMenu = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            IconButton(onClick = { isSearchExpanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Search,
+                                    contentDescription = "Rechercher",
+                                    tint = AlertsPalette.textSecondary
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            val filteredTrains = allDelayedTrains.filter { 
-                it.number.contains(searchQuery, ignoreCase = true) 
+            items(
+                count = sortedTrains.size,
+                key = { sortedTrains[it].id }
+            ) { index ->
+                DelayedTrainCard(train = sortedTrains[index])
             }
-
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                filteredTrains.forEach { train ->
-                    DelayedTrainCard(train = train)
+            
+            if (isLoading && page > 1) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = AlertsPalette.blue, modifier = Modifier.size(24.dp))
+                    }
+                }
+            } else if (!isLoading && hasMore && sortedTrains.isNotEmpty() && searchQuery.isEmpty()) {
+                item {
+                    LaunchedEffect(Unit) {
+                        page++
+                    }
                 }
             }
         }
+
+        PullToRefreshContainer(
+            state = pullToRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter),
+            containerColor = AlertsPalette.panel,
+            contentColor = AlertsPalette.blue
+        )
     }
 }
 
 @Composable
-private fun AlertsStatsRow() {
+private fun AlertsStatsRow(stats: com.octarahq.trainflow.NetworkStatusStats?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         StatBox(
             title = "PONCTUALITÉ",
-            value = "87%",
+            value = "${stats?.punctuality ?: 0}%",
             valueColor = AlertsPalette.green,
             modifier = Modifier.weight(1f)
         ) {
@@ -227,21 +327,40 @@ private fun AlertsStatsRow() {
         }
         StatBox(
             title = "INCIDENTS",
-            value = "5",
+            value = "${stats?.incidents ?: 0}",
             valueColor = AlertsPalette.amber,
             modifier = Modifier.weight(1f)
         ) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(modifier = Modifier.height(4.dp).weight(1f).background(AlertsPalette.red, RoundedCornerShape(2.dp)))
-                Box(modifier = Modifier.height(4.dp).weight(1f).background(AlertsPalette.red, RoundedCornerShape(2.dp)))
-                Box(modifier = Modifier.height(4.dp).weight(1f).background(AlertsPalette.amber, RoundedCornerShape(2.dp)))
-                Box(modifier = Modifier.height(4.dp).weight(1f).background(AlertsPalette.surface, RoundedCornerShape(2.dp)))
-                Box(modifier = Modifier.height(4.dp).weight(1f).background(AlertsPalette.surface, RoundedCornerShape(2.dp)))
+                val incidents = stats?.incidents ?: 0
+                val delays = stats?.delays ?: 0
+                
+                val redBars = kotlin.math.ceil(incidents / 50.0).toInt()
+                val yellowBars = kotlin.math.ceil(delays / 200.0).toInt()
+                
+                var currentBars = 0
+                
+                for (i in 0 until redBars) {
+                    if (currentBars >= 5) break
+                    Box(modifier = Modifier.height(4.dp).weight(1f).background(AlertsPalette.red, RoundedCornerShape(2.dp)))
+                    currentBars++
+                }
+                
+                for (i in 0 until yellowBars) {
+                    if (currentBars >= 5) break
+                    Box(modifier = Modifier.height(4.dp).weight(1f).background(AlertsPalette.amber, RoundedCornerShape(2.dp)))
+                    currentBars++
+                }
+                
+                while (currentBars < 5) {
+                    Box(modifier = Modifier.height(4.dp).weight(1f).background(AlertsPalette.surface, RoundedCornerShape(2.dp)))
+                    currentBars++
+                }
             }
         }
         StatBox(
             title = "TRAINS ACTIFS",
-            value = "1 247",
+            value = "${stats?.inTransit ?: 0}",
             valueColor = AlertsPalette.textPrimary,
             modifier = Modifier.weight(1f)
         ) {
@@ -308,6 +427,7 @@ private fun DelayedTrainCard(train: DelayedTrain) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -324,12 +444,16 @@ private fun DelayedTrainCard(train: DelayedTrain) {
                         )
                     }
                     Text(
-                        text = train.number,
+                        text = train.number.ifBlank { train.destination.ifBlank { "Inconnue" } },
                         color = AlertsPalette.textPrimary,
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
+                Spacer(modifier = Modifier.width(8.dp))
                 Surface(
                     color = train.delayBgColor,
                     shape = RoundedCornerShape(12.dp)
@@ -352,7 +476,10 @@ private fun DelayedTrainCard(train: DelayedTrain) {
                     text = train.origin,
                     color = AlertsPalette.textPrimary,
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -364,24 +491,10 @@ private fun DelayedTrainCard(train: DelayedTrain) {
                     text = train.destination,
                     color = AlertsPalette.textPrimary,
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Info,
-                    contentDescription = null,
-                    tint = AlertsPalette.textSecondary,
-                    modifier = Modifier.size(14.dp)
-                )
-                Text(
-                    text = train.reason,
-                    color = AlertsPalette.textSecondary,
-                    fontSize = 13.sp
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
             }
         }

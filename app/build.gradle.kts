@@ -13,10 +13,12 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "BASE_URL", "\"https://apitrainflow.orionhost.app\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -43,13 +45,17 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
 }
 
 afterEvaluate {
-    tasks.named("installDebug") {
-        doLast {
-            exec {
-                commandLine("adb", "shell", "am", "start", "-n", "com.octarahq.trainflow/.MainActivity")
+    tasks.configureEach {
+        if (name == "installDebug") {
+            doLast {
+                exec {
+                    commandLine("adb", "shell", "am", "start", "-n", "com.octarahq.trainflow/.MainActivity")
+                }
             }
         }
     }
