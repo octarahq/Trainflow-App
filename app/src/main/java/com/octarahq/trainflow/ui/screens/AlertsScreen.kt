@@ -21,8 +21,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Search
+import com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenu
@@ -119,16 +120,10 @@ fun AlertsScreen() {
             currentStats = networkStatus.stats
             
             val newTrains = networkStatus.delayedTrains.map { train ->
+                val display = getTrainCategoryDisplay(train.type)
                 DelayedTrain(
-                    type = when {
-                        train.type.contains("suburban") -> "RER/Transilien"
-                        train.type.contains("regional") -> "TER"
-                        train.type.contains("highspeedrail") -> "TGV"
-                        train.type.contains("longdistance") -> "Longue distance"
-                        train.type.contains("local") -> "Local"
-                        else -> train.type
-                    },
-                    typeColor = AlertsPalette.blue,
+                    type = display.label,
+                    typeColor = display.color,
                     typeTextColor = Color.White,
                     number = train.number,
                     delay = "+${train.delayMinutes} min",
@@ -243,7 +238,7 @@ fun AlertsScreen() {
                             Box {
                                 IconButton(onClick = { showSortMenu = true }) {
                                     Icon(
-                                        imageVector = Icons.Filled.List,
+                                        imageVector = Icons.AutoMirrored.Filled.List,
                                         contentDescription = "Trier",
                                         tint = AlertsPalette.textSecondary
                                     )

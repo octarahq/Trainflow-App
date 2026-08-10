@@ -22,9 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -120,18 +121,9 @@ fun SearchScreen(
     val uiTrains = trains.map { 
         val status = if (it.obj.delayMinutes == 0) "À l'heure" else "+${it.obj.delayMinutes} min"
         val statusColor = if (it.obj.delayMinutes == 0) SearchPalette.green else SearchPalette.amber
-        val badgeColor = when {
-            it.obj.type.contains("suburban") -> SearchPalette.blue
-            it.obj.type.contains("regional") -> SearchPalette.teal
-            it.obj.type.contains("highspeedrail") -> SearchPalette.purple
-            else -> SearchPalette.textSecondary
-        }
-        val typeLabel = when {
-            it.obj.type.contains("suburban") -> "RER"
-            it.obj.type.contains("regional") -> "TER"
-            it.obj.type.contains("highspeedrail") -> "TGV"
-            else -> it.obj.type
-        }
+        val display = getTrainCategoryDisplay(it.obj.type)
+        val badgeColor = display.color
+        val typeLabel = display.label
 
         TrainResult(
             badge = typeLabel,
@@ -161,8 +153,6 @@ fun SearchScreen(
                 onBack = onBack
             )
             SearchTabs(
-                garesCount = uiStations.size,
-                trainsCount = uiTrains.size,
                 selectedTab = selectedTab,
                 onTabSelected = { selectedTab = it }
             )
@@ -337,8 +327,6 @@ private fun SearchTopBar(
 
 @Composable
 private fun SearchTabs(
-    garesCount: Int,
-    trainsCount: Int,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit
 ) {
@@ -358,7 +346,7 @@ private fun SearchTabs(
             label = "Trains",
             onClick = { onTabSelected(1) }
         ) { color ->
-            Icon(Icons.Filled.List, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+            Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
         }
     }
 }
