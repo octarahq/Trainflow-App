@@ -1,12 +1,12 @@
 package com.octarahq.trainflow.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -26,17 +29,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Canvas
 
 private object TrainInfoPalette {
     val background = Color(0xFF0F1115)
@@ -52,34 +49,57 @@ private object TrainInfoPalette {
 }
 
 @Composable
-fun TrainInfoScreen(onBack: () -> Unit = {}) {
+fun TrainInfoScreen(trainId: String = "", speedKmh: Int? = null, onBack: () -> Unit = {}) {
+    var train by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.octarahq.trainflow.InterpolatedJourney?>(null) }
+    var loading by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+
+    androidx.compose.runtime.LaunchedEffect(trainId) {
+        if (trainId.isNotEmpty()) {
+            try {
+                val response = com.octarahq.trainflow.ApiClient.apiService.getSingleVehicle(trainId)
+                train = response.vehicle
+            } catch (e: Exception) {
+            } finally {
+                loading = false
+            }
+        } else {
+            loading = false
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(TrainInfoPalette.background)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 170.dp)
-        ) {
-            TrainInfoTopBar(onBack = onBack)
+        if (loading) {
+            androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = TrainInfoPalette.blue)
+        } else if (train == null) {
+            Text("Train non trouvé", color = TrainInfoPalette.textPrimary, modifier = Modifier.align(Alignment.Center))
+        } else {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 170.dp)
             ) {
-                HeroCard()
-                SectionTitle(text = "Parcours du Train")
-                TimelineCard()
-                DetailsCard()
+                TrainInfoTopBar(train = train!!, onBack = onBack)
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    HeroCard(train = train!!, speedKmh = speedKmh)
+                    SectionTitle(text = "Parcours du Train")
+                    TimelineCard(train = train!!)
+                    DetailsCard(train = train!!)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TrainInfoTopBar(onBack: () -> Unit) {
+private fun TrainInfoTopBar(train: com.octarahq.trainflow.InterpolatedJourney, onBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -104,8 +124,9 @@ private fun TrainInfoTopBar(onBack: () -> Unit) {
             color = TrainInfoPalette.surface,
             shape = RoundedCornerShape(6.dp)
         ) {
+            val name = train.journey.TrainNumbers?.TrainNumberRef ?: train.journey.PublishedLineName
             Text(
-                text = "TGV 6231",
+                text = name,
                 color = TrainInfoPalette.textPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
@@ -116,35 +137,42 @@ private fun TrainInfoTopBar(onBack: () -> Unit) {
 }
 
 @Composable
-private fun HeroCard() {
+private fun HeroCard(train: com.octarahq.trainflow.InterpolatedJourney, speedKmh: Int? = null) {
     Surface(
         color = TrainInfoPalette.panel,
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, TrainInfoPalette.border)
     ) {
+        val category = com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay(train.journey.ProductCategoryRef)
+        val name = train.journey.TrainNumbers?.TrainNumberRef ?: train.journey.PublishedLineName
+        val delayText = if ((train.delayMinutes ?: 0) > 0) "+${train.delayMinutes} min" else "À l'heure"
+        val statusColor = if ((train.delayMinutes ?: 0) > 0) TrainInfoPalette.amber else TrainInfoPalette.activeGreen
+
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(color = TrainInfoPalette.purple, shape = RoundedCornerShape(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Surface(color = category.color, shape = RoundedCornerShape(6.dp)) {
                         Text(
-                            text = "TGV",
-                            color = Color(0xFFF3E8FF),
+                            text = category.label.uppercase(),
+                            color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
                     }
                     Text(
-                        text = "InOui 6231",
+                        text = name,
                         color = TrainInfoPalette.textPrimary,
                         fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                Surface(color = Color(0xFF064E3B), shape = RoundedCornerShape(20.dp)) {
+                Surface(color = statusColor.copy(alpha = 0.2f), shape = RoundedCornerShape(20.dp)) {
                     Text(
-                        text = "À l'heure",
-                        color = TrainInfoPalette.activeGreen,
+                        text = delayText,
+                        color = statusColor,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -155,9 +183,12 @@ private fun HeroCard() {
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(TrainInfoPalette.border))
 
             Row(modifier = Modifier.fillMaxWidth()) {
-                StatColumn(title = "VITESSE", value = "246 km/h", valueColor = TrainInfoPalette.textPrimary, modifier = Modifier.weight(1f))
-                StatColumn(title = "RETARD CUMULÉ", value = "0 min", valueColor = TrainInfoPalette.activeGreen, modifier = Modifier.weight(1f))
-                StatColumn(title = "SUIVANT", value = "Lyon Part-D...", valueColor = TrainInfoPalette.blue, modifier = Modifier.weight(1f), truncate = true)
+                val nextStop = com.octarahq.trainflow.ui.utils.getNextStopInfo(train)
+                val stopName = nextStop?.name ?: train.journey.DestinationName
+                val speedText = speedKmh?.let { "$it km/h" } ?: "En route"
+                StatColumn(title = "VITESSE", value = speedText, valueColor = TrainInfoPalette.textPrimary, modifier = Modifier.weight(1f))
+                StatColumn(title = "RETARD CUMULÉ", value = "${train.delayMinutes ?: 0} min", valueColor = if ((train.delayMinutes ?: 0) > 0) TrainInfoPalette.amber else TrainInfoPalette.activeGreen, modifier = Modifier.weight(1f))
+                StatColumn(title = "SUIVANT", value = stopName, valueColor = TrainInfoPalette.blue, modifier = Modifier.weight(1f), truncate = true)
             }
         }
     }
@@ -195,119 +226,170 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun TimelineCard() {
+private fun TimelineCard(train: com.octarahq.trainflow.InterpolatedJourney) {
     Surface(
         color = TrainInfoPalette.panel,
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, TrainInfoPalette.border)
+        border = BorderStroke(1.dp, TrainInfoPalette.border)
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            listOf(
-                TimelineStop("14:15", "14:15", "Paris Gare de Lyon", active = true, last = false),
-                TimelineStop("15:28", "15:28", "Creusot TGV", active = true, last = false),
-                TimelineStop("15:52", "15:52", "Macon Loché TGV", active = true, last = false),
-                TimelineStop("16:18", "16:18", "Lyon Part-Dieu", active = false, last = false),
-                TimelineStop("16:54", "16:54", "Valence TGV", active = false, last = false),
-                TimelineStop("17:19", "17:19", "Marseille Saint-Charles", active = false, last = true)
-            ).forEachIndexed { index, stop ->
-                StopRow(stop = stop, showConnector = index != 5)
+        val timeline = com.octarahq.trainflow.ui.utils.buildTimeline(train)
+        if (timeline.isEmpty()) {
+            Text(
+                "Aucun arrêt prévu",
+                color = TrainInfoPalette.textSecondary,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(16.dp)
+            )
+        } else {
+            Column(modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp)) {
+                timeline.forEachIndexed { index, stop ->
+                    StopRow(
+                        stop = stop,
+                        isLast = index == timeline.size - 1
+                    )
+                }
             }
         }
     }
 }
 
-private data class TimelineStop(
-    val time: String,
-    val subTime: String,
-    val station: String,
-    val active: Boolean,
-    val last: Boolean
-)
-
 @Composable
-private fun StopRow(stop: TimelineStop, showConnector: Boolean) {
+private fun StopRow(
+    stop: com.octarahq.trainflow.ui.utils.TimelineStop,
+    isLast: Boolean
+) {
+    val isPassed = stop.status == com.octarahq.trainflow.ui.utils.StopStatus.PASSED
+    val isCurrent = stop.status == com.octarahq.trainflow.ui.utils.StopStatus.CURRENT
+
+    val stationColor = when {
+        isPassed -> TrainInfoPalette.textPrimary
+        isCurrent -> TrainInfoPalette.blue
+        else -> TrainInfoPalette.textSecondary
+    }
+    val timeColor = when {
+        isPassed -> TrainInfoPalette.textSecondary
+        isCurrent -> TrainInfoPalette.textPrimary
+        else -> TrainInfoPalette.textSecondary
+    }
+
+    val trackWidthDp = 6.dp
+    val dotSizeDp = if (isCurrent) 14.dp else 10.dp
+    val railColWidthDp = 28.dp
+    val connectorHeightDp = if (isLast) 0.dp else 36.dp
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top
     ) {
-        Column(
-            modifier = Modifier.width(48.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            horizontalAlignment = Alignment.Start
-        ) {
-            Text(
-                text = stop.time,
-                color = if (stop.active) TrainInfoPalette.textPrimary else TrainInfoPalette.textSecondary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = stop.subTime,
-                color = TrainInfoPalette.activeGreen,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Normal
-            )
-        }
-
         Box(
-            modifier = Modifier
-                .width(20.dp)
-                .height(72.dp),
+            modifier = Modifier.width(railColWidthDp),
             contentAlignment = Alignment.TopCenter
         ) {
-            StopRail(active = stop.active, showConnector = showConnector)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (isCurrent) {
+                    Box(
+                        modifier = Modifier
+                            .size(dotSizeDp + 10.dp)
+                            .background(TrainInfoPalette.blue.copy(alpha = 0.20f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(dotSizeDp)
+                                .background(TrainInfoPalette.blue, CircleShape)
+                        )
+                    }
+                } else if (isPassed) {
+                    Box(
+                        modifier = Modifier
+                            .size(dotSizeDp)
+                            .background(TrainInfoPalette.blue, CircleShape)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(dotSizeDp)
+                            .background(Color(0xFF1E293B), CircleShape)
+                            .border(2.dp, Color(0xFF475569), CircleShape)
+                    )
+                }
+
+                if (!isLast) {
+                    Box(
+                        modifier = Modifier
+                            .width(trackWidthDp)
+                            .height(connectorHeightDp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF1E293B))
+                        )
+                        
+                        if (isPassed) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(TrainInfoPalette.blue)
+                            )
+                        } else if (isCurrent && stop.segmentFill > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(connectorHeightDp * stop.segmentFill)
+                                    .background(TrainInfoPalette.blue)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        Column(
+        Row(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 2.dp, top = 2.dp)
+                .padding(
+                    start = 8.dp,
+                    bottom = if (isLast) 0.dp else connectorHeightDp + dotSizeDp - 12.dp
+                ),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = stop.station,
-                color = if (stop.active && stop.station == "Lyon Part-Dieu") TrainInfoPalette.textPrimary else TrainInfoPalette.textSecondary,
-                fontSize = 14.sp,
-                fontWeight = if (stop.active && stop.station == "Lyon Part-Dieu") FontWeight.Bold else FontWeight.Medium
+                color = stationColor,
+                fontSize = if (isCurrent) 15.sp else 13.sp,
+                fontWeight = if (isCurrent || isPassed) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.weight(1f)
             )
+            if (stop.time.isNotBlank()) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Text(
+                        text = stop.time,
+                        color = timeColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (stop.subTime.isNotBlank() && stop.subTime != stop.time) {
+                        Text(
+                            text = stop.subTime,
+                            color = TrainInfoPalette.activeGreen,
+                            fontSize = 10.sp,
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
-@Composable
-private fun StopRail(active: Boolean, showConnector: Boolean) {
-    Canvas(modifier = Modifier.size(width = 16.dp, height = 72.dp)) {
-        val centerX = size.width / 2f
-        val top = 6f
-        val bottom = size.height - 6f
-        val lineColor = if (active) TrainInfoPalette.blue else TrainInfoPalette.border
-        val dotColor = if (active) TrainInfoPalette.blue else Color(0xFF94A3B8)
-
-        drawCircle(
-            color = dotColor,
-            radius = 5.5f,
-            center = Offset(centerX, top)
-        )
-        drawCircle(
-            color = dotColor,
-            radius = 5.5f,
-            center = Offset(centerX, top),
-            style = Stroke(width = 2.4f)
-        )
-
-        if (showConnector) {
-            drawLine(
-                color = lineColor,
-                start = Offset(centerX, top + 8f),
-                end = Offset(centerX, bottom),
-                strokeWidth = 2.4f,
-                cap = StrokeCap.Round
-            )
-        }
-    }
-}
 
 @Composable
-private fun DetailsCard() {
+private fun DetailsCard(train: com.octarahq.trainflow.InterpolatedJourney) {
     Surface(
         color = TrainInfoPalette.panel,
         shape = RoundedCornerShape(16.dp),
@@ -323,14 +405,17 @@ private fun DetailsCard() {
 
             Row(modifier = Modifier.fillMaxWidth()) {
                 SpecItem(label = "Opérateur", value = "SNCF", modifier = Modifier.weight(1f))
-                SpecItem(label = "Composition", value = "Double Rame (8 voitures)", modifier = Modifier.weight(1f))
+                val category = com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay(train.journey.ProductCategoryRef)
+                SpecItem(label = "Composition", value = category.label, modifier = Modifier.weight(1f))
             }
 
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(TrainInfoPalette.border))
 
             Row(modifier = Modifier.fillMaxWidth()) {
-                SpecItem(label = "Type de rame", value = "TGV Euroduplex", modifier = Modifier.weight(1f))
-                SpecItem(label = "Voie Prévue", value = "Voie H (Gare de Lyon)", valueColor = TrainInfoPalette.amber, modifier = Modifier.weight(1f))
+                SpecItem(label = "Destination", value = train.journey.DestinationName, modifier = Modifier.weight(1f))
+                val nextStop = com.octarahq.trainflow.ui.utils.getNextStopInfo(train)
+                val platformStr = nextStop?.platform?.let { "Voie $it" } ?: "Voie non annoncée"
+                SpecItem(label = "Voie Prévue", value = platformStr, valueColor = TrainInfoPalette.amber, modifier = Modifier.weight(1f))
             }
         }
     }
