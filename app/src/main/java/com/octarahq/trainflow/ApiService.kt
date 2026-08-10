@@ -31,4 +31,39 @@ interface ApiService {
         @Query("page") page: Int,
         @Query("pageSize") pageSize: Int = 10
     ): NetworkStatus
+
+    @GET("/search")
+    suspend fun search(
+        @Query("q") query: String,
+        @Query("result") result: String
+    ): SearchResponse
 }
+
+data class SearchResponse(
+    val gares: List<GareSearchResult>? = null,
+    val trains: List<TrainSearchResult>? = null
+)
+
+data class GareSearchResult(
+    val obj: GareObj,
+    val distance: Int
+)
+
+data class GareObj(
+    val name: String,
+    val uic: String? = null
+)
+
+data class TrainSearchResult(
+    val obj: TrainObj,
+    val distance: Int
+)
+
+data class TrainObj(
+    val name: String,
+    val type: String,
+    val delayMinutes: Int,
+    val origin: String,
+    val destination: String,
+    val passingByUIC: String? = null
+)

@@ -21,12 +21,27 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.text.TextStyle
+import kotlinx.coroutines.delay
+import com.octarahq.trainflow.ApiClient
+import com.octarahq.trainflow.GareSearchResult
+import com.octarahq.trainflow.TrainSearchResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -72,19 +87,61 @@ fun SearchScreen(
     onBack: () -> Unit = {},
     onOpenTrainInfo: () -> Unit = {}
 ) {
-    val stations = listOf(
-        StationResult("Lyon Part-Dieu", "12 lignes (TGV, TER, Intercités)"),
-        StationResult("Lyon Perrache", "8 lignes (TGV, TER)"),
-        StationResult("Lyon Saint-Exupéry TGV", "6 lignes (TGV, Rer)"),
-        StationResult("Lyon Jean Macé", "4 lignes (TER, Métro B)"),
-        StationResult("Lyon Vaise", "3 lignes (TER, Métro D)")
-    )
+    var searchQuery by remember { mutableStateOf("") }
+    var gares by remember { mutableStateOf<List<GareSearchResult>>(emptyList()) }
+    var trains by remember { mutableStateOf<List<TrainSearchResult>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(0) }
 
-    val trains = listOf(
-        TrainResult("TGV", "6231", "Paris Gare de Lyon → Marseille", "À l'heure", SearchPalette.green, SearchPalette.purple),
-        TrainResult("TER", "86509", "Bordeaux St-Jean → Lyon Part-Dieu", "À l'heure", SearchPalette.green, SearchPalette.teal),
-        TrainResult("TGV", "6604", "Lyon Part-Dieu → Paris GDL", "+12 min", SearchPalette.amber, SearchPalette.purple)
-    )
+    LaunchedEffect(searchQuery, selectedTab) {
+        if (searchQuery.isBlank()) {
+            gares = emptyList()
+            trains = emptyList()
+            return@LaunchedEffect
+        }
+        delay(300)
+        isLoading = true
+        try {
+            val resultParam = if (selectedTab == 0) "gare" else "train"
+            val response = ApiClient.apiService.search(searchQuery, resultParam)
+            gares = response.gares ?: emptyList()
+            trains = response.trains ?: emptyList()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            isLoading = false
+        }
+    }
+
+    val uiStations = gares.map { 
+        StationResult(it.obj.name, it.obj.uic ?: "")
+    }
+
+    val uiTrains = trains.map { 
+        val status = if (it.obj.delayMinutes == 0) "À l'heure" else "+${it.obj.delayMinutes} min"
+        val statusColor = if (it.obj.delayMinutes == 0) SearchPalette.green else SearchPalette.amber
+        val badgeColor = when {
+            it.obj.type.contains("suburban") -> SearchPalette.blue
+            it.obj.type.contains("regional") -> SearchPalette.teal
+            it.obj.type.contains("highspeedrail") -> SearchPalette.purple
+            else -> SearchPalette.textSecondary
+        }
+        val typeLabel = when {
+            it.obj.type.contains("suburban") -> "RER"
+            it.obj.type.contains("regional") -> "TER"
+            it.obj.type.contains("highspeedrail") -> "TGV"
+            else -> it.obj.type
+        }
+
+        TrainResult(
+            badge = typeLabel,
+            number = it.obj.name,
+            route = "${it.obj.origin} → ${it.obj.destination}",
+            status = status,
+            statusColor = statusColor,
+            badgeColor = badgeColor
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -97,35 +154,103 @@ fun SearchScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 170.dp)
         ) {
-            SearchTopBar(onBack = onBack)
-            SearchTabs()
+            SearchTopBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                onClear = { searchQuery = "" },
+                onBack = onBack
+            )
+            SearchTabs(
+                garesCount = uiStations.size,
+                trainsCount = uiTrains.size,
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it }
+            )
 
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                stations.forEach { station ->
-                    StationResultCard(
-                        station = station,
-                        onClick = onOpenTrainInfo
-                    )
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = SearchPalette.blue)
                 }
+            } else if (searchQuery.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = null,
+                            tint = SearchPalette.textSecondary,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Text(
+                            text = "Rechercher une gare ou un train",
+                            color = SearchPalette.textSecondary,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+            } else if (uiStations.isEmpty() && uiTrains.isEmpty() && searchQuery.isNotEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Text("Aucun résultat", color = SearchPalette.textSecondary)
+                }
+            } else {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (selectedTab == 0) {
+                        uiStations.forEach { station ->
+                            StationResultCard(
+                                station = station,
+                                onClick = onOpenTrainInfo
+                            )
+                        }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                        if (uiStations.isNotEmpty() && uiTrains.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
 
-                Text(
-                    text = "Trains passant par Lyon",
-                    color = SearchPalette.textPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                )
+                        if (uiTrains.isNotEmpty()) {
+                            val stationName = uiStations.firstOrNull()?.name
+                            val headerText = if (stationName != null) {
+                                "${uiTrains.size} Trains passant par $stationName"
+                            } else {
+                                "${uiTrains.size} Trains"
+                            }
+                            Text(
+                                text = headerText,
+                                color = SearchPalette.textPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                            )
 
-                trains.forEach { train ->
-                    TrainResultCard(
-                        train = train,
-                        onClick = onOpenTrainInfo
-                    )
+                            uiTrains.forEach { train ->
+                                TrainResultCard(
+                                    train = train,
+                                    onClick = onOpenTrainInfo
+                                )
+                            }
+                        }
+                    } else {
+                        if (uiTrains.isNotEmpty()) {
+                            Text(
+                                text = "${uiTrains.size} Trains",
+                                color = SearchPalette.textPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                            )
+    
+                            uiTrains.forEach { train ->
+                                TrainResultCard(
+                                    train = train,
+                                    onClick = onOpenTrainInfo
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -133,7 +258,12 @@ fun SearchScreen(
 }
 
 @Composable
-private fun SearchTopBar(onBack: () -> Unit) {
+private fun SearchTopBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClear: () -> Unit,
+    onBack: () -> Unit
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -161,19 +291,38 @@ private fun SearchTopBar(onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Lyon",
-                        color = SearchPalette.textPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f)
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        textStyle = TextStyle(
+                            color = SearchPalette.textPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        decorationBox = { innerTextField ->
+                            if (query.isEmpty()) {
+                                Text(
+                                    text = "Rechercher...",
+                                    color = SearchPalette.textSecondary,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            innerTextField()
+                        }
                     )
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Effacer",
-                        tint = SearchPalette.textSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = onClear, modifier = Modifier.size(18.dp)) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Effacer",
+                                tint = SearchPalette.textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -187,19 +336,37 @@ private fun SearchTopBar(onBack: () -> Unit) {
 }
 
 @Composable
-private fun SearchTabs() {
+private fun SearchTabs(
+    garesCount: Int,
+    trainsCount: Int,
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit
+) {
     Row(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SearchTab(selected = true, label = "Gares (5)") { StationTabGlyph() }
-        SearchTab(selected = false, label = "Trains") { TrainTabGlyph() }
+        SearchTab(
+            selected = selectedTab == 0,
+            label = "Gares",
+            onClick = { onTabSelected(0) }
+        ) { color ->
+            Icon(Icons.Filled.LocationOn, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+        }
+        SearchTab(
+            selected = selectedTab == 1,
+            label = "Trains",
+            onClick = { onTabSelected(1) }
+        ) { color ->
+            Icon(Icons.Filled.List, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+        }
     }
 }
 
 @Composable
-private fun SearchTab(selected: Boolean, label: String, glyph: @Composable () -> Unit) {
+private fun SearchTab(selected: Boolean, label: String, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
     Surface(
+        onClick = onClick,
         color = if (selected) SearchPalette.panel else SearchPalette.surface,
         shape = RoundedCornerShape(18.dp),
         border = androidx.compose.foundation.BorderStroke(
@@ -212,46 +379,13 @@ private fun SearchTab(selected: Boolean, label: String, glyph: @Composable () ->
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            glyph()
+            glyph(if (selected) SearchPalette.blue else SearchPalette.textSecondary)
             Text(
                 text = label,
                 color = if (selected) SearchPalette.textPrimary else SearchPalette.textSecondary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
-        }
-    }
-}
-
-@Composable
-private fun StationTabGlyph() {
-    Box(
-        modifier = Modifier
-            .size(16.dp)
-            .background(Color.Transparent),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.size(14.dp)) {
-            drawLine(Color(0xFF3B82F6), Offset(size.width * 0.2f, size.height * 0.15f), Offset(size.width * 0.2f, size.height * 0.9f), strokeWidth = 1.6f)
-            drawLine(Color(0xFF3B82F6), Offset(size.width * 0.5f, size.height * 0.15f), Offset(size.width * 0.5f, size.height * 0.9f), strokeWidth = 1.6f)
-            drawLine(Color(0xFF3B82F6), Offset(size.width * 0.8f, size.height * 0.3f), Offset(size.width * 0.8f, size.height * 0.9f), strokeWidth = 1.6f)
-        }
-    }
-}
-
-@Composable
-private fun TrainTabGlyph() {
-    Box(
-        modifier = Modifier
-            .size(16.dp)
-            .background(Color.Transparent),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.size(14.dp)) {
-            drawCircle(Color(0xFF94A3B8), radius = size.minDimension * 0.18f, center = Offset(size.width * 0.5f, size.height * 0.42f), style = Stroke(width = 1.4f))
-            drawLine(Color(0xFF94A3B8), Offset(size.width * 0.32f, size.height * 0.76f), Offset(size.width * 0.68f, size.height * 0.76f), strokeWidth = 1.4f)
-            drawLine(Color(0xFF94A3B8), Offset(size.width * 0.42f, size.height * 0.76f), Offset(size.width * 0.38f, size.height * 0.94f), strokeWidth = 1.4f)
-            drawLine(Color(0xFF94A3B8), Offset(size.width * 0.58f, size.height * 0.76f), Offset(size.width * 0.62f, size.height * 0.94f), strokeWidth = 1.4f)
         }
     }
 }
@@ -277,7 +411,12 @@ private fun StationResultCard(station: StationResult, onClick: () -> Unit) {
                     modifier = Modifier.size(40.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    StationGlyph()
+                    Icon(
+                        imageVector = Icons.Filled.LocationOn,
+                        contentDescription = null,
+                        tint = SearchPalette.blue,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
 
@@ -286,12 +425,16 @@ private fun StationResultCard(station: StationResult, onClick: () -> Unit) {
                     text = station.name,
                     color = SearchPalette.textPrimary,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = station.details,
                     color = SearchPalette.textSecondary,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -305,21 +448,6 @@ private fun StationResultCard(station: StationResult, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun StationGlyph() {
-    Canvas(modifier = Modifier.size(20.dp)) {
-        drawRoundRect(
-            color = SearchPalette.blue,
-            topLeft = Offset(size.width * 0.32f, size.height * 0.14f),
-            size = androidx.compose.ui.geometry.Size(size.width * 0.36f, size.height * 0.72f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f),
-            style = Stroke(width = 1.8f)
-        )
-        drawLine(SearchPalette.blue, Offset(size.width * 0.22f, size.height * 0.15f), Offset(size.width * 0.22f, size.height * 0.85f), strokeWidth = 1.8f)
-        drawLine(SearchPalette.blue, Offset(size.width * 0.78f, size.height * 0.15f), Offset(size.width * 0.78f, size.height * 0.85f), strokeWidth = 1.8f)
-        drawCircle(SearchPalette.blue, radius = 1.7f, center = Offset(size.width * 0.5f, size.height * 0.5f))
-    }
-}
 
 @Composable
 private fun TrainResultCard(train: TrainResult, onClick: () -> Unit) {
@@ -349,12 +477,16 @@ private fun TrainResultCard(train: TrainResult, onClick: () -> Unit) {
                     text = "${train.badge} ${train.number}",
                     color = SearchPalette.textPrimary,
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = train.route,
                     color = SearchPalette.textSecondary,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
