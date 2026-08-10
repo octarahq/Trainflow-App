@@ -33,7 +33,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.octarahq.trainflow.ApiClient
 import com.octarahq.trainflow.NetworkStatusStats
+import com.octarahq.trainflow.InterpolatedJourney
+import com.octarahq.trainflow.ui.components.TrainflowMap
 import com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -78,6 +82,9 @@ fun HomeScreen(
     onOpenSearch: () -> Unit = {}
 ) {
     var networkStatus by remember { mutableStateOf<NetworkStatusStats?>(null) }
+    var liveVehicles by remember { mutableStateOf<List<InterpolatedJourney>>(emptyList()) }
+    val scope = rememberCoroutineScope()
+    var interactionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -91,12 +98,27 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val response = ApiClient.apiService.getLiveVehicles()
+                liveVehicles = response.vehicles
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            kotlinx.coroutines.delay(10_000)
+        }
+    }
+
+    val scaffoldState = androidx.compose.material3.rememberBottomSheetScaffoldState(
+        bottomSheetState = androidx.compose.material3.rememberStandardBottomSheetState(
+            initialValue = androidx.compose.material3.SheetValue.Expanded,
+            skipHiddenState = false
+        )
+    )
+
     BottomSheetScaffold(
-        scaffoldState = androidx.compose.material3.rememberBottomSheetScaffoldState(
-            bottomSheetState = androidx.compose.material3.rememberStandardBottomSheetState(
-                initialValue = androidx.compose.material3.SheetValue.Expanded
-            )
-        ),
+        scaffoldState = scaffoldState,
         sheetPeekHeight = 96.dp,
         sheetSwipeEnabled = true,
         sheetContainerColor = TrainflowPalette.panel,
@@ -110,7 +132,21 @@ fun HomeScreen(
                 .fillMaxSize()
                 .background(TrainflowPalette.background)
         ) {
-            TrainflowMapBackground(modifier = Modifier.fillMaxSize())
+            TrainflowMap(
+                trains = liveVehicles,
+                onMapInteract = {
+                    interactionJob?.cancel()
+                    scope.launch {
+                        if (scaffoldState.bottomSheetState.currentValue != androidx.compose.material3.SheetValue.Hidden) {
+                            scaffoldState.bottomSheetState.hide()
+                        }
+                    }
+                    interactionJob = scope.launch {
+                        kotlinx.coroutines.delay(1000)
+                        scaffoldState.bottomSheetState.partialExpand()
+                    }
+                }
+            )
 
             HomeTopControls(
                 modifier = Modifier

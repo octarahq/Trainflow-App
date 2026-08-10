@@ -39,7 +39,31 @@ interface ApiService {
         @Query("q") query: String,
         @Query("result") result: String
     ): SearchResponse
+    @GET("/live/vehicles")
+    suspend fun getLiveVehicles(): LiveVehiclesResponse
 }
+
+data class LiveVehiclesResponse(
+    val count: Int,
+    val vehicles: List<InterpolatedJourney>
+)
+
+data class InterpolatedJourney(
+    val journey: TrainJourney,
+    val status: String,
+    val delayMinutes: Int? = null,
+    val lastStopId: String,
+    val nextStopId: String,
+    val ratio: Double,
+    val lat: Double,
+    val lon: Double
+)
+
+data class TrainJourney(
+    val PublishedLineName: String,
+    val ProductCategoryRef: String,
+    val VehicleMode: String
+)
 
 data class SearchResponse(
     val gares: List<GareSearchResult>? = null,

@@ -33,9 +33,17 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
+    implementation("org.maplibre.gl:android-sdk:11.5.0")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.0")
 
