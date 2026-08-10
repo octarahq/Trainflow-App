@@ -26,6 +26,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.octarahq.trainflow.ApiClient
+import com.octarahq.trainflow.NetworkStatusStats
+import com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -69,6 +77,20 @@ fun HomeScreen(
     onOpenMenu: () -> Unit = {},
     onOpenSearch: () -> Unit = {}
 ) {
+    var networkStatus by remember { mutableStateOf<NetworkStatusStats?>(null) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val response = ApiClient.apiService.getNetworkStatus(showDelaysTrains = 0)
+                networkStatus = response.stats
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            kotlinx.coroutines.delay(120_000)
+        }
+    }
+
     BottomSheetScaffold(
         scaffoldState = androidx.compose.material3.rememberBottomSheetScaffoldState(
             bottomSheetState = androidx.compose.material3.rememberStandardBottomSheetState(
@@ -80,7 +102,7 @@ fun HomeScreen(
         sheetContainerColor = TrainflowPalette.panel,
         sheetShadowElevation = 12.dp,
         sheetContent = {
-            HomeBottomSheet(onOpenSearch = onOpenSearch)
+            HomeBottomSheet(onOpenSearch = onOpenSearch, stats = networkStatus)
         }
     ) {
         Box(
@@ -245,8 +267,13 @@ private fun FloatingControlButton(
 
 @Composable
 private fun HomeBottomSheet(
-    onOpenSearch: () -> Unit
+    onOpenSearch: () -> Unit,
+    stats: NetworkStatusStats?
 ) {
+    val actifs = stats?.inTransit?.toString() ?: "--"
+    val ponctuels = stats?.punctuality?.let { "$it%" } ?: "--%"
+    val retards = stats?.punctuality?.let { "${100 - it}%" } ?: "--%"
+
     Surface(
         color = TrainflowPalette.panel,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -299,7 +326,7 @@ private fun HomeBottomSheet(
                     StatCard(
                         modifier = Modifier.weight(1f),
                         title = "Actifs",
-                        value = "142",
+                        value = actifs,
                         valueColor = TrainflowPalette.textPrimary,
                         leading = {
                             TrainFrontIcon(
@@ -311,7 +338,7 @@ private fun HomeBottomSheet(
                     StatCard(
                         modifier = Modifier.weight(1f),
                         title = "Ponctuels",
-                        value = "87%",
+                        value = ponctuels,
                         valueColor = TrainflowPalette.activeGreen,
                         leading = {
                             StatusDot(
@@ -323,7 +350,7 @@ private fun HomeBottomSheet(
                     StatCard(
                         modifier = Modifier.weight(1f),
                         title = "Retards",
-                        value = "13%",
+                        value = retards,
                         valueColor = TrainflowPalette.delayAmber,
                         leading = {
                             StatusDot(
@@ -335,15 +362,20 @@ private fun HomeBottomSheet(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        BreakdownChip(label = "TGV", value = "48", badgeColor = TrainflowPalette.purple)
-                        BreakdownChip(label = "TER", value = "62", badgeColor = TrainflowPalette.teal)
-                        BreakdownChip(label = "Intercités", value = "18", badgeColor = TrainflowPalette.blue)
+                    val counts = stats?.trainCounts?.toList()?.sortedByDescending { it.second } ?: emptyList()
+                    val chunks = counts.chunked(3)
+                    
+                    chunks.forEach { chunk ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            chunk.forEach { (key, count) ->
+                                val display = getTrainCategoryDisplay(key)
+                                BreakdownChip(label = display.label, value = count.toString(), badgeColor = display.color)
+                            }
+                        }
                     }
-                    BreakdownChip(label = "RER", value = "14", badgeColor = TrainflowPalette.pink)
                 }
             }
         }
@@ -476,3 +508,5 @@ private fun TrainFrontIcon(
         )
     }
 }
+
+

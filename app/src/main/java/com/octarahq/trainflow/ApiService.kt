@@ -13,7 +13,8 @@ data class NetworkStatusStats(
     val incidents: Int,
     val lastUpdated: String,
     val punctuality: Int,
-    val total: Int
+    val total: Int,
+    val trainCounts: Map<String, Int>? = null
 )
 
 data class DelayedTrain(
@@ -28,8 +29,9 @@ data class DelayedTrain(
 interface ApiService {
     @GET("/network/status")
     suspend fun getNetworkStatus(
-        @Query("page") page: Int,
-        @Query("pageSize") pageSize: Int = 10
+        @Query("page") page: Int? = null,
+        @Query("pageSize") pageSize: Int? = null,
+        @Query("showDelaysTrains") showDelaysTrains: Int? = null
     ): NetworkStatus
 
     @GET("/search")
