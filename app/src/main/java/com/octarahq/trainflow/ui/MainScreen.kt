@@ -65,13 +65,22 @@ fun MainScreen(intent: Intent? = null) {
     }
 
     LaunchedEffect(intent) {
-        if (intent != null && intent.getStringExtra("navigate_to") == "update") {
-            val tag = intent.getStringExtra("update_tag") ?: ""
-            val notes = intent.getStringExtra("update_notes") ?: ""
-            val apkUrl = intent.getStringExtra("update_apk_url") ?: ""
-            if (tag.isNotBlank() && apkUrl.isNotBlank()) {
-                navController.navigate(Screen.Update.createRoute(tag, notes, apkUrl)) {
-                    launchSingleTop = true
+        if (intent != null) {
+            if (intent.action == Intent.ACTION_VIEW && intent.data != null) {
+                val trainId = parseTrainIdFromUri(intent.data)
+                if (!trainId.isNullOrEmpty()) {
+                    navController.navigate(Screen.TrainInfo.createRoute(trainId, null)) {
+                        launchSingleTop = true
+                    }
+                }
+            } else if (intent.getStringExtra("navigate_to") == "update") {
+                val tag = intent.getStringExtra("update_tag") ?: ""
+                val notes = intent.getStringExtra("update_notes") ?: ""
+                val apkUrl = intent.getStringExtra("update_apk_url") ?: ""
+                if (tag.isNotBlank() && apkUrl.isNotBlank()) {
+                    navController.navigate(Screen.Update.createRoute(tag, notes, apkUrl)) {
+                        launchSingleTop = true
+                    }
                 }
             }
         }
@@ -336,4 +345,33 @@ fun MainScreen(intent: Intent? = null) {
             )
         }
     }
+}
+
+private fun parseTrainIdFromUri(uri: android.net.Uri?): String? {
+    if (uri == null) return null
+    val path = uri.path ?: ""
+    val segments = uri.pathSegments ?: emptyList()
+
+    val trainIndex = segments.indexOf("train")
+    if (trainIndex != -1 && trainIndex + 1 < segments.size) {
+        val rawTrainId = segments[trainIndex + 1]
+        return try {
+            URLDecoder.decode(rawTrainId, "UTF-8")
+        } catch (e: Exception) {
+            rawTrainId
+        }
+    }
+
+    if (path.contains("/train/")) {
+        val rawPart = path.substringAfter("/train/").substringBefore('?').trim('/')
+        if (rawPart.isNotBlank()) {
+            return try {
+                URLDecoder.decode(rawPart, "UTF-8")
+            } catch (e: Exception) {
+                rawPart
+            }
+        }
+    }
+
+    return null
 }

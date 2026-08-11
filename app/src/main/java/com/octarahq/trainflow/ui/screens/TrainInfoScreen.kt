@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.getValue
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -109,7 +111,32 @@ fun TrainInfoScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 170.dp)
             ) {
-                TrainInfoTopBar(train = train!!, onBack = onBack)
+                val shareJourneyLink = {
+                    val journeyRef = train?.journey?.VehicleJourneyRef?.ifBlank { trainId } ?: trainId
+                    val encodedRef = try {
+                        java.net.URLEncoder.encode(journeyRef, "UTF-8")
+                    } catch (e: Exception) {
+                        journeyRef
+                    }
+                    val shareUrl = "https://trainflow.octara.xyz/en/train/$encodedRef"
+
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    if (clipboard != null) {
+                        val clip = android.content.ClipData.newPlainText("Trajet Trainflow", shareUrl)
+                        clipboard.setPrimaryClip(clip)
+                    }
+                    android.widget.Toast.makeText(context, "Lien copié dans le presse-papier", android.widget.Toast.LENGTH_SHORT).show()
+
+                    val sendIntent = android.content.Intent().apply {
+                        action = android.content.Intent.ACTION_SEND
+                        putExtra(android.content.Intent.EXTRA_TEXT, shareUrl)
+                        type = "text/plain"
+                    }
+                    val shareIntent = android.content.Intent.createChooser(sendIntent, "Partager le trajet")
+                    context.startActivity(shareIntent)
+                }
+
+                TrainInfoTopBar(train = train!!, onBack = onBack, onShare = shareJourneyLink)
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -118,7 +145,7 @@ fun TrainInfoScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         androidx.compose.material3.Button(
                             onClick = {
@@ -130,28 +157,28 @@ fun TrainInfoScreen(
                                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            modifier = Modifier.weight(1f).height(50.dp),
+                            modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                                 containerColor = if (isFollowed) Color(0xFFEF4444) else TrainInfoPalette.blue,
                                 contentColor = Color.White
                             )
                         ) {
-                            Text(if (isFollowed) "Ne plus suivre" else "Suivre", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(if (isFollowed) "Ne plus suivre" else "Suivre", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
 
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
                                 onLocateOnMap(trainId)
                             },
-                            modifier = Modifier.weight(1f).height(50.dp),
+                            modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, TrainInfoPalette.blue),
+                            border = BorderStroke(1.dp, TrainInfoPalette.blue),
                             colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                                 contentColor = TrainInfoPalette.blue
                             )
                         ) {
-                            Text("Voir sur carte", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Carte", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
 
@@ -267,7 +294,11 @@ private fun NotificationOptionsCard(trainNumber: String) {
 }
 
 @Composable
-private fun TrainInfoTopBar(train: com.octarahq.trainflow.InterpolatedJourney, onBack: () -> Unit) {
+private fun TrainInfoTopBar(
+    train: com.octarahq.trainflow.InterpolatedJourney,
+    onBack: () -> Unit,
+    onShare: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -288,6 +319,14 @@ private fun TrainInfoTopBar(train: com.octarahq.trainflow.InterpolatedJourney, o
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 16.dp)
         )
+        IconButton(onClick = onShare, modifier = Modifier.size(24.dp)) {
+            Icon(
+                imageVector = Icons.Default.Share,
+                contentDescription = "Partager",
+                tint = TrainInfoPalette.blue
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
         Surface(
             color = TrainInfoPalette.surface,
             shape = RoundedCornerShape(6.dp)
