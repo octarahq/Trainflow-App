@@ -1,7 +1,7 @@
 package com.octarahq.trainflow.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,46 +13,42 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
-import com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.text.TextStyle
-import kotlinx.coroutines.delay
-import com.octarahq.trainflow.ApiClient
-import com.octarahq.trainflow.GareSearchResult
-import com.octarahq.trainflow.TrainSearchResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.foundation.Canvas
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.octarahq.trainflow.ApiClient
+import com.octarahq.trainflow.GareObj
+import com.octarahq.trainflow.GareSearchResult
+import com.octarahq.trainflow.TrainSearchResult
+import com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay
+import kotlinx.coroutines.delay
 
 private object SearchPalette {
     val background = Color(0xFF0F1115)
@@ -62,15 +58,14 @@ private object SearchPalette {
     val textPrimary = Color(0xFFF1F5F9)
     val textSecondary = Color(0xFF94A3B8)
     val blue = Color(0xFF3B82F6)
-    val purple = Color(0xFF7C3AED)
-    val teal = Color(0xFF0D9488)
     val amber = Color(0xFFFBBF24)
     val green = Color(0xFF22C55E)
 }
 
 private data class StationResult(
     val name: String,
-    val details: String
+    val details: String,
+    val rawObj: GareObj
 )
 
 private data class TrainResult(
@@ -80,13 +75,14 @@ private data class TrainResult(
     val status: String,
     val statusColor: Color,
     val badgeColor: Color,
-    val onClick: Boolean = true
+    val smartId: String = ""
 )
 
 @Composable
 fun SearchScreen(
     onBack: () -> Unit = {},
-    onOpenTrainInfo: () -> Unit = {}
+    onOpenTrainInfo: (String) -> Unit = {},
+    onOpenStationInfo: (String, String?, Double?, Double?) -> Unit = { _, _, _, _ -> }
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var gares by remember { mutableStateOf<List<GareSearchResult>>(emptyList()) }
@@ -115,7 +111,7 @@ fun SearchScreen(
     }
 
     val uiStations = gares.map { 
-        StationResult(it.obj.name, it.obj.uic ?: "")
+        StationResult(it.obj.name, it.obj.uic ?: "", it.obj)
     }
 
     val uiTrains = trains.map { 
@@ -131,7 +127,8 @@ fun SearchScreen(
             route = "${it.obj.origin} → ${it.obj.destination}",
             status = status,
             statusColor = statusColor,
-            badgeColor = badgeColor
+            badgeColor = badgeColor,
+            smartId = it.obj.name
         )
     }
 
@@ -193,7 +190,14 @@ fun SearchScreen(
                         uiStations.forEach { station ->
                             StationResultCard(
                                 station = station,
-                                onClick = onOpenTrainInfo
+                                onClick = {
+                                    onOpenStationInfo(
+                                        station.rawObj.name,
+                                        station.rawObj.uic,
+                                        station.rawObj.lat,
+                                        station.rawObj.lon
+                                    )
+                                }
                             )
                         }
 
@@ -219,7 +223,7 @@ fun SearchScreen(
                             uiTrains.forEach { train ->
                                 TrainResultCard(
                                     train = train,
-                                    onClick = onOpenTrainInfo
+                                    onClick = { if (train.smartId.isNotBlank()) onOpenTrainInfo(train.smartId) }
                                 )
                             }
                         }
@@ -236,7 +240,7 @@ fun SearchScreen(
                             uiTrains.forEach { train ->
                                 TrainResultCard(
                                     train = train,
-                                    onClick = onOpenTrainInfo
+                                    onClick = { if (train.smartId.isNotBlank()) onOpenTrainInfo(train.smartId) }
                                 )
                             }
                         }
@@ -273,7 +277,7 @@ private fun SearchTopBar(
             Surface(
                 color = SearchPalette.surface,
                 shape = RoundedCornerShape(18.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, SearchPalette.border),
+                border = BorderStroke(1.dp, SearchPalette.border),
                 modifier = Modifier.weight(1f)
             ) {
                 Row(
@@ -357,7 +361,7 @@ private fun SearchTab(selected: Boolean, label: String, onClick: () -> Unit, gly
         onClick = onClick,
         color = if (selected) SearchPalette.panel else SearchPalette.surface,
         shape = RoundedCornerShape(18.dp),
-        border = androidx.compose.foundation.BorderStroke(
+        border = BorderStroke(
             1.dp,
             if (selected) SearchPalette.blue else SearchPalette.border
         )
@@ -384,7 +388,7 @@ private fun StationResultCard(station: StationResult, onClick: () -> Unit) {
         onClick = onClick,
         color = SearchPalette.panel,
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, SearchPalette.border)
+        border = BorderStroke(1.dp, SearchPalette.border)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -436,14 +440,13 @@ private fun StationResultCard(station: StationResult, onClick: () -> Unit) {
     }
 }
 
-
 @Composable
 private fun TrainResultCard(train: TrainResult, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         color = SearchPalette.panel,
         shape = RoundedCornerShape(14.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, SearchPalette.border)
+        border = BorderStroke(1.dp, SearchPalette.border)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),

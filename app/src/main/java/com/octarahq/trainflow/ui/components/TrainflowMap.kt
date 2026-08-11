@@ -37,7 +37,9 @@ fun TrainflowMap(
     isCameraLocked: Boolean,
     onCameraLockChange: (Boolean) -> Unit,
     onMapInteract: () -> Unit,
-    onTrainClick: (InterpolatedJourney) -> Unit
+    onTrainClick: (InterpolatedJourney) -> Unit,
+    targetLat: Double? = null,
+    targetLon: Double? = null
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -176,6 +178,15 @@ fun TrainflowMap(
         while (true) {
             frameTrigger = System.currentTimeMillis()
             kotlinx.coroutines.delay(16)
+        }
+    }
+
+    LaunchedEffect(targetLat, targetLon, mapLibreMap) {
+        if (targetLat != null && targetLon != null && mapLibreMap != null) {
+            mapLibreMap?.animateCamera(
+                CameraUpdateFactory.newLatLngZoom(LatLng(targetLat, targetLon), 13.5),
+                1000
+            )
         }
     }
 

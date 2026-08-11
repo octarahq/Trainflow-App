@@ -129,7 +129,9 @@ data class GareSearchResult(
 
 data class GareObj(
     val name: String,
-    val uic: String? = null
+    val uic: String? = null,
+    val lat: Double? = null,
+    val lon: Double? = null
 )
 
 data class TrainSearchResult(

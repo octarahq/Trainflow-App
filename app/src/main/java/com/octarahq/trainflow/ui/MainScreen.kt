@@ -37,6 +37,7 @@ import com.octarahq.trainflow.ui.navigation.Screen
 import com.octarahq.trainflow.ui.screens.AlertsScreen
 import com.octarahq.trainflow.ui.screens.HomeScreen
 import com.octarahq.trainflow.ui.screens.SearchScreen
+import com.octarahq.trainflow.ui.screens.StationInfoScreen
 import com.octarahq.trainflow.ui.screens.TicketScanResultScreen
 import com.octarahq.trainflow.ui.screens.TrainInfoScreen
 import com.octarahq.trainflow.ui.screens.TripsScreen
@@ -121,12 +122,29 @@ fun MainScreen(intent: Intent? = null) {
                             type = NavType.StringType
                             nullable = true
                             defaultValue = null
+                        },
+                        navArgument("lat") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        navArgument("lon") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
                         }
                     )
                 ) { backStackEntry ->
                     val selectTrainId = backStackEntry.arguments?.getString("select")
+                    val latStr = backStackEntry.arguments?.getString("lat")
+                    val lonStr = backStackEntry.arguments?.getString("lon")
+                    val targetLat = latStr?.toDoubleOrNull()
+                    val targetLon = lonStr?.toDoubleOrNull()
+
                     HomeScreen(
                         selectTrainId = selectTrainId,
+                        targetLat = targetLat,
+                        targetLon = targetLon,
                         onOpenMenu = {
                             scope.launch { drawerState.open() }
                         },
@@ -160,7 +178,12 @@ fun MainScreen(intent: Intent? = null) {
                 composable(Screen.Search.route) {
                     SearchScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenTrainInfo = {}
+                        onOpenTrainInfo = { trainId ->
+                            navController.navigate(Screen.TrainInfo.createRoute(trainId, null)) { launchSingleTop = true }
+                        },
+                        onOpenStationInfo = { stationName, uic, lat, lon ->
+                            navController.navigate(Screen.StationInfo.createRoute(stationName, uic, lat, lon)) { launchSingleTop = true }
+                        }
                     )
                 }
                 composable(Screen.Alerts.route) { AlertsScreen() }
@@ -185,6 +208,41 @@ fun MainScreen(intent: Intent? = null) {
                             navController.navigate(Screen.Home.createRoute(selectTrainId)) {
                                 popUpTo(Screen.Home.route) { inclusive = true }
                             }
+                        }
+                    )
+                }
+                composable(
+                    route = Screen.StationInfo.route,
+                    arguments = listOf(
+                        navArgument("stationName") { type = NavType.StringType },
+                        navArgument("uic") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument("lat") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument("lon") { type = NavType.StringType; nullable = true; defaultValue = null }
+                    )
+                ) { backStackEntry ->
+                    val rawName = backStackEntry.arguments?.getString("stationName") ?: ""
+                    val rawUic = backStackEntry.arguments?.getString("uic")
+                    val latStr = backStackEntry.arguments?.getString("lat")
+                    val lonStr = backStackEntry.arguments?.getString("lon")
+
+                    val stationName = try { URLDecoder.decode(rawName, "UTF-8") } catch (e: Exception) { rawName }
+                    val uic = rawUic?.let { try { URLDecoder.decode(it, "UTF-8") } catch (e: Exception) { it } }
+                    val lat = latStr?.toDoubleOrNull()
+                    val lon = lonStr?.toDoubleOrNull()
+
+                    StationInfoScreen(
+                        stationName = stationName,
+                        uic = uic,
+                        lat = lat,
+                        lon = lon,
+                        onBack = { navController.popBackStack() },
+                        onLocateOnMap = { gLat, gLon ->
+                            navController.navigate(Screen.Home.createRoute(lat = gLat, lon = gLon)) {
+                                popUpTo(Screen.Home.route) { inclusive = true }
+                            }
+                        },
+                        onOpenTrainInfo = { trainId ->
+                            navController.navigate(Screen.TrainInfo.createRoute(trainId, null)) { launchSingleTop = true }
                         }
                     )
                 }
@@ -252,7 +310,7 @@ fun MainScreen(intent: Intent? = null) {
                 )
             }
 
-            if (currentRoute in setOf(Screen.Trips.route, Screen.Search.route, Screen.Alerts.route, Screen.TrainInfo.route)) {
+            if (currentRoute in setOf(Screen.Trips.route, Screen.Search.route, Screen.Alerts.route, Screen.TrainInfo.route, Screen.StationInfo.route)) {
                 TrainflowBottomChrome(
                     currentRoute = currentRoute,
                     dropdownOpen = dropdownOpen,

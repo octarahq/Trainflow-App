@@ -98,6 +98,8 @@ private object TrainflowPalette {
 @Composable
 fun HomeScreen(
     selectTrainId: String? = null,
+    targetLat: Double? = null,
+    targetLon: Double? = null,
     onOpenMenu: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
     onOpenTrainInfo: (String, Int?) -> Unit = { _, _ -> },
@@ -247,7 +249,9 @@ fun HomeScreen(
                     scope.launch {
                         scaffoldState.bottomSheetState.hide()
                     }
-                }
+                },
+                targetLat = targetLat,
+                targetLon = targetLon
             )
 
             HomeTopControls(
