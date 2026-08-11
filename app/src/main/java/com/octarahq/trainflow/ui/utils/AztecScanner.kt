@@ -219,8 +219,19 @@ object AztecScanner {
                 }
             }
 
+            val timeRegex = Regex("\\b\\d{2}:\\d{2}\\b")
+            val times = lines.flatMap { line -> timeRegex.findAll(line).map { it.value } }
+            var departureTime = "--:--"
+            var arrivalTime = "--:--"
+            if (times.size >= 2) {
+                departureTime = times[0]
+                arrivalTime = times[1]
+            } else if (times.size == 1) {
+                departureTime = times[0]
+            }
+
             if (departure.isNotEmpty() || arrival.isNotEmpty() || passengerName.isNotEmpty() || pnr.isNotEmpty()) {
-                return "ocr_parsed:${departure}|${arrival}|${dateStr}|${trainNumber}|${passengerName}|${pnr}"
+                return "ocr_parsed:${departure}|${arrival}|${dateStr}|${trainNumber}|${passengerName}|${pnr}|${departureTime}|${arrivalTime}"
             }
             null
         } catch (e: Exception) {

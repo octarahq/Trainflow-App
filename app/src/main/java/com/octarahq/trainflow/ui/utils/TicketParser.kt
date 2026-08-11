@@ -7,6 +7,8 @@ data class ParsedTicket(
     val arrivalStationCode: String,
     val trainNumber: String,
     val travelDate: String,
+    val departureTime: String = "--:--",
+    val arrivalTime: String = "--:--",
     val isSecureBinary: Boolean = false,
     val hexDump: String = ""
 )
@@ -17,7 +19,7 @@ object TicketParser {
         try {
             if (raw.startsWith("ocr_parsed:")) {
                 val parts = raw.removePrefix("ocr_parsed:").split("|")
-                if (parts.size >= 6) {
+                if (parts.size >= 8) {
                     return ParsedTicket(
                         departureStationCode = parts[0].ifEmpty { "Inconnue" },
                         arrivalStationCode = parts[1].ifEmpty { "Inconnue" },
@@ -25,6 +27,8 @@ object TicketParser {
                         trainNumber = parts[3].ifEmpty { "N/A" },
                         passengerName = parts[4].ifEmpty { "Voyageur inconnu" },
                         pnr = parts[5].ifEmpty { "Aucun" },
+                        departureTime = parts[6].ifEmpty { "--:--" },
+                        arrivalTime = parts[7].ifEmpty { "--:--" },
                         isSecureBinary = false
                     )
                 }

@@ -19,18 +19,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.octarahq.trainflow.ui.utils.JourneyRepository
+import com.octarahq.trainflow.ui.utils.SavedJourney
 
 private object TripsPalette {
     val background = Color(0xFF0F1115)
@@ -64,23 +73,10 @@ private data class TripItem(
 fun TripsScreen(
     onBack: () -> Unit = {},
     onSearch: () -> Unit = {},
-    onOpenTrainInfo: () -> Unit = {}
+    onOpenTrainInfo: (String, String?) -> Unit = { _, _ -> }
 ) {
-    val trips = listOf(
-        TripItem(
-            date = "Aujourd'hui, 14 Oct",
-            trainType = "TGV",
-            trainNumber = "6231",
-            departureTime = "14:15",
-            arrivalTime = "17:19",
-            departureStation = "Paris Gare de Lyon",
-            arrivalStation = "Marseille Saint-Charles",
-            duration = "3h 04m",
-            status = "À l'heure",
-            statusColor = TripsPalette.activeGreen,
-            badgeColor = TripsPalette.purple
-        )
-    )
+    val context = LocalContext.current
+    var journeysList by remember { mutableStateOf<List<SavedJourney>>(JourneyRepository.getJourneys(context)) }
 
     Box(
         modifier = Modifier
@@ -90,22 +86,45 @@ fun TripsScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             TripsTopBar(onBack = onBack, onSearch = onSearch)
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .padding(bottom = 170.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                trips.forEachIndexed { _, item ->
-                    TripCard(
-                        trip = item,
-                        onClick = onOpenTrainInfo
+            if (journeysList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 32.dp)
+                        .padding(bottom = 120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Aucun voyage actif.\nAppuyez sur le bouton + pour en ajouter un.",
+                        color = TripsPalette.textSecondary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center
                     )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                        .padding(bottom = 170.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    for (item in journeysList) {
+                        TripCard(
+                            journey = item,
+                            onDelete = {
+                                JourneyRepository.deleteJourney(context, item.pnr, item.trainNumber)
+                                journeysList = JourneyRepository.getJourneys(context)
+                            },
+                            onClick = {
+                                onOpenTrainInfo(item.trainNumber, item.vehicleJourneyRef)
+                            }
+                        )
+                    }
                 }
             }
         }
-
     }
 }
 
@@ -142,7 +161,11 @@ private fun TripsTopBar(onBack: () -> Unit, onSearch: () -> Unit) {
 }
 
 @Composable
-private fun TripCard(trip: TripItem, onClick: () -> Unit) {
+private fun TripCard(
+    journey: SavedJourney,
+    onDelete: () -> Unit,
+    onClick: () -> Unit
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -161,29 +184,39 @@ private fun TripCard(trip: TripItem, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(14.dp).border(1.dp, TripsPalette.textSecondary, RoundedCornerShape(3.dp)))
                     Text(
-                        text = trip.date,
+                        text = journey.travelDate,
                         color = TripsPalette.textSecondary,
                         fontSize = 13.sp
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(color = trip.badgeColor, shape = RoundedCornerShape(6.dp)) {
+                    val catRef = journey.categoryRef ?: ""
+                    val categoryDisplay = com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay(catRef.ifEmpty { "train" })
+                    Surface(color = categoryDisplay.color, shape = RoundedCornerShape(6.dp)) {
                         Text(
-                            text = trip.trainType,
-                            color = Color(0xFFF3E8FF),
+                            text = categoryDisplay.label.uppercase(),
+                            color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
                     }
                     Text(
-                        text = trip.trainNumber,
+                        text = "n°${journey.trainNumber}",
                         color = TripsPalette.textSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
+                    
+                    IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Supprimer",
+                            tint = Color(0xFFEF4444).copy(alpha = 0.8f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -197,18 +230,18 @@ private fun TripCard(trip: TripItem, onClick: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                     horizontalAlignment = Alignment.End
                 ) {
-                    Text(text = trip.departureTime, color = TripsPalette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text(text = trip.arrivalTime, color = TripsPalette.textSecondary, fontSize = 14.sp)
+                    Text(text = journey.departureTime, color = TripsPalette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(text = journey.arrivalTime, color = TripsPalette.textSecondary, fontSize = 14.sp)
                 }
 
-                TimelineRail(active = trip.statusColor == TripsPalette.activeGreen)
+                TimelineRail(active = true)
 
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = trip.departureStation,
+                        text = journey.departureStationCode,
                         color = TripsPalette.textPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -216,34 +249,12 @@ private fun TripCard(trip: TripItem, onClick: () -> Unit) {
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = trip.arrivalStation,
+                        text = journey.arrivalStationCode,
                         color = TripsPalette.textPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(TripsPalette.border))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = trip.duration, color = TripsPalette.textSecondary, fontSize = 13.sp)
-                Surface(
-                    color = if (trip.statusColor == TripsPalette.activeGreen) Color(0xFF064E3B) else Color(0xFF451A03),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Text(
-                        text = trip.status,
-                        color = trip.statusColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
             }

@@ -56,6 +56,7 @@ import com.octarahq.trainflow.ApiClient
 import com.octarahq.trainflow.NetworkStatusStats
 import com.octarahq.trainflow.InterpolatedJourney
 import com.octarahq.trainflow.ui.components.TrainflowMap
+import com.octarahq.trainflow.ui.utils.JourneyRepository
 import com.octarahq.trainflow.ui.utils.getTrainCategoryDisplay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,6 +97,7 @@ private object TrainflowPalette {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    selectTrainId: String? = null,
     onOpenMenu: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
     onOpenTrainInfo: (String, Int?) -> Unit = { _, _ -> }
@@ -107,6 +109,20 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     var interactionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var selectedCategoryLabels by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    LaunchedEffect(liveVehicles, selectTrainId) {
+        if (selectTrainId != null && liveVehicles.isNotEmpty()) {
+            val matched = liveVehicles.firstOrNull { train ->
+                val smartId = train.journey.FramedVehicleJourneyRef?.DatedVehicleJourneyRef 
+                    ?: train.journey.TrainNumbers?.TrainNumberRef 
+                    ?: train.journey.VehicleJourneyRef
+                smartId == selectTrainId || train.journey.TrainNumbers?.TrainNumberRef == selectTrainId
+            }
+            if (matched != null) {
+                selectedTrain = matched
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -432,24 +448,41 @@ fun TrainDetailOverlay(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            val context = androidx.compose.ui.platform.LocalContext.current
+            var isFollowed by remember(train) {
+                mutableStateOf(
+                    JourneyRepository.isJourneyFollowed(
+                        context,
+                        train.journey.TrainNumbers?.TrainNumberRef ?: train.journey.PublishedLineName,
+                        train.journey.VehicleJourneyRef
+                    )
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OverlayActionButton(
                     icon = Icons.Filled.LocationOn,
-                    label = if (isCameraLocked) "Ne plus suivre" else "Suivre",
+                    label = if (isCameraLocked) "Libérer" else "Centrer",
                     modifier = Modifier.weight(1f).clickable { onCameraLockChange(!isCameraLocked) }
                 )
                 OverlayActionButton(
                     icon = Icons.Filled.Info,
-                    label = if (showOnlySelected) "Tout afficher" else "Afficher seul",
+                    label = if (showOnlySelected) "Tout aff." else "Isoler",
                     modifier = Modifier.weight(1f).clickable { onShowOnlySelectedChange(!showOnlySelected) }
                 )
                 OverlayActionButton(
                     icon = Icons.Filled.Notifications,
-                    label = "Notification",
-                    modifier = Modifier.weight(1f)
+                    label = if (isFollowed) "Ne plus suivre" else "Suivre",
+                    modifier = Modifier.weight(1f).clickable {
+                        val nowFollowed = JourneyRepository.toggleFollowJourney(context, train)
+                        isFollowed = nowFollowed
+                        val trainNum = train.journey.TrainNumbers?.TrainNumberRef ?: train.journey.PublishedLineName
+                        val msg = if (nowFollowed) "Suivi activé pour le train n°$trainNum" else "Suivi arrêté pour le train n°$trainNum"
+                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 )
             }
 

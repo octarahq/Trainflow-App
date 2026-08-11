@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.Color
 
 data class TrainCategoryDisplay(val label: String, val color: Color)
 
-fun getTrainCategoryDisplay(key: String): TrainCategoryDisplay {
+fun getTrainCategoryDisplay(key: String?): TrainCategoryDisplay {
     val activeGreen = Color(0xFF4ADE80)
     val delayAmber = Color(0xFFFBBF24)
     val blue = Color(0xFF3B82F6)
@@ -13,7 +13,8 @@ fun getTrainCategoryDisplay(key: String): TrainCategoryDisplay {
     val purple = Color(0xFF7C3AED)
     val textSecondary = Color(0xFF94A3B8)
     
-    return when (key.lowercase()) {
+    val safeKey = (key ?: "").lowercase()
+    return when (safeKey) {
         "fr:typeofproductcategory::highspeedrail::", "tgv", "highspeedrail" -> TrainCategoryDisplay("TGV", purple)
         "fr:typeofproductcategory::regionalrail::", "ter", "regionalrail" -> TrainCategoryDisplay("TER", teal)
         "fr:typeofproductcategory::interregionalrail::", "intercités", "interregionalrail" -> TrainCategoryDisplay("Intercités", blue)
@@ -29,7 +30,7 @@ fun getTrainCategoryDisplay(key: String): TrainCategoryDisplay {
         "fr:typeofproductcategory::railreplacementcoach::", "railreplacementcoach" -> TrainCategoryDisplay("Car de Remplacement", Color(0xFFDC2626))
         "rail", "train" -> TrainCategoryDisplay("Train", textSecondary)
         else -> {
-            val shortName = key.removePrefix("fr:typeofproductcategory::").removeSuffix("::").replaceFirstChar { it.uppercase() }
+            val shortName = safeKey.removePrefix("fr:typeofproductcategory::").removeSuffix("::").replaceFirstChar { it.uppercase() }
             TrainCategoryDisplay(shortName.ifEmpty { "Train" }, textSecondary)
         }
     }

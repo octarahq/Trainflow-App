@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.octarahq.trainflow.ui.utils.JourneyRepository
 
 private object TrainInfoPalette {
     val background = Color(0xFF0F1115)
@@ -49,15 +50,40 @@ private object TrainInfoPalette {
 }
 
 @Composable
-fun TrainInfoScreen(trainId: String = "", speedKmh: Int? = null, onBack: () -> Unit = {}) {
+fun TrainInfoScreen(
+    trainId: String = "",
+    speedKmh: Int? = null,
+    onBack: () -> Unit = {},
+    onLocateOnMap: (String) -> Unit = {}
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var train by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.octarahq.trainflow.InterpolatedJourney?>(null) }
     var loading by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+
+    var isFollowed by androidx.compose.runtime.remember(train) {
+        androidx.compose.runtime.mutableStateOf(
+            train?.let {
+                JourneyRepository.isJourneyFollowed(
+                    context,
+                    it.journey.TrainNumbers?.TrainNumberRef ?: it.journey.PublishedLineName,
+                    it.journey.VehicleJourneyRef
+                )
+            } ?: false
+        )
+    }
 
     androidx.compose.runtime.LaunchedEffect(trainId) {
         if (trainId.isNotEmpty()) {
             try {
                 val response = com.octarahq.trainflow.ApiClient.apiService.getSingleVehicle(trainId)
                 train = response.vehicle
+                if (response.vehicle != null) {
+                    isFollowed = JourneyRepository.isJourneyFollowed(
+                        context,
+                        response.vehicle.journey.TrainNumbers?.TrainNumberRef ?: response.vehicle.journey.PublishedLineName,
+                        response.vehicle.journey.VehicleJourneyRef
+                    )
+                }
             } catch (e: Exception) {
             } finally {
                 loading = false
@@ -89,10 +115,152 @@ fun TrainInfoScreen(trainId: String = "", speedKmh: Int? = null, onBack: () -> U
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     HeroCard(train = train!!, speedKmh = speedKmh)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        androidx.compose.material3.Button(
+                            onClick = {
+                                if (train != null) {
+                                    val nowFollowed = JourneyRepository.toggleFollowJourney(context, train!!)
+                                    isFollowed = nowFollowed
+                                    val trainNum = train!!.journey.TrainNumbers?.TrainNumberRef ?: train!!.journey.PublishedLineName
+                                    val msg = if (nowFollowed) "Suivi activé pour le train n°$trainNum" else "Suivi arrêté pour le train n°$trainNum"
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = if (isFollowed) Color(0xFFEF4444) else TrainInfoPalette.blue,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text(if (isFollowed) "Ne plus suivre" else "Suivre", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                onLocateOnMap(trainId)
+                            },
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, TrainInfoPalette.blue),
+                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                contentColor = TrainInfoPalette.blue
+                            )
+                        ) {
+                            Text("Voir sur carte", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+
+                    if (isFollowed && train != null) {
+                        val trainNum = train!!.journey.TrainNumbers?.TrainNumberRef ?: train!!.journey.PublishedLineName
+                        NotificationOptionsCard(trainNumber = trainNum)
+                    }
+
                     SectionTitle(text = "Parcours du Train")
                     TimelineCard(train = train!!)
                     DetailsCard(train = train!!)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationOptionsCard(trainNumber: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var savedJourney by androidx.compose.runtime.remember(trainNumber) {
+        androidx.compose.runtime.mutableStateOf(JourneyRepository.getJourneyForTrain(context, trainNumber))
+    }
+
+    var notifyPlatform by androidx.compose.runtime.remember(savedJourney) { androidx.compose.runtime.mutableStateOf(savedJourney?.notifyPlatform ?: true) }
+    var notifyTerminus by androidx.compose.runtime.remember(savedJourney) { androidx.compose.runtime.mutableStateOf(savedJourney?.notifyTerminus ?: true) }
+    var notifyDelay by androidx.compose.runtime.remember(savedJourney) { androidx.compose.runtime.mutableStateOf(savedJourney?.notifyDelay ?: true) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = TrainInfoPalette.panel,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, TrainInfoPalette.border)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Options de notification",
+                color = TrainInfoPalette.textPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Alerte Voie de départ", color = TrainInfoPalette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Alerte au départ si la voie est annoncée", color = TrainInfoPalette.textSecondary, fontSize = 12.sp)
+                }
+                androidx.compose.material3.Switch(
+                    checked = notifyPlatform,
+                    onCheckedChange = { checked ->
+                        notifyPlatform = checked
+                        JourneyRepository.updateNotificationSettings(context, trainNumber, checked, notifyTerminus, notifyDelay)
+                    },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = TrainInfoPalette.blue
+                    )
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Sonnerie Terminus", color = TrainInfoPalette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Sonnerie 5 min avant d'arriver à votre gare", color = TrainInfoPalette.textSecondary, fontSize = 12.sp)
+                }
+                androidx.compose.material3.Switch(
+                    checked = notifyTerminus,
+                    onCheckedChange = { checked ->
+                        notifyTerminus = checked
+                        JourneyRepository.updateNotificationSettings(context, trainNumber, notifyPlatform, checked, notifyDelay)
+                    },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = TrainInfoPalette.blue
+                    )
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Alertes Retard", color = TrainInfoPalette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Notification si le train est retardé", color = TrainInfoPalette.textSecondary, fontSize = 12.sp)
+                }
+                androidx.compose.material3.Switch(
+                    checked = notifyDelay,
+                    onCheckedChange = { checked ->
+                        notifyDelay = checked
+                        JourneyRepository.updateNotificationSettings(context, trainNumber, notifyPlatform, notifyTerminus, checked)
+                    },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = TrainInfoPalette.blue
+                    )
+                )
             }
         }
     }

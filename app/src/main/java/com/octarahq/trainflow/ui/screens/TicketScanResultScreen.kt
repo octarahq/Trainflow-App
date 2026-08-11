@@ -28,9 +28,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import com.octarahq.trainflow.ui.utils.JourneyRepository
+import com.octarahq.trainflow.ui.utils.JourneyTrackerWorker
+import com.octarahq.trainflow.ui.utils.SavedJourney
 import com.octarahq.trainflow.ui.utils.TicketParser
+import java.util.concurrent.TimeUnit
 
 private object ScanResultPalette {
     val background = Color(0xFF0F1115)
@@ -48,6 +57,7 @@ fun TicketScanResultScreen(
     onBack: () -> Unit = {},
     onRescan: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
     val parsedTicket = TicketParser.parse(rawData)
 
@@ -187,7 +197,34 @@ fun TicketScanResultScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
-                        onClick = {},
+                        onClick = {
+                            val savedJourney = SavedJourney(
+                                pnr = parsedTicket.pnr,
+                                passengerName = parsedTicket.passengerName,
+                                departureStationCode = parsedTicket.departureStationCode,
+                                arrivalStationCode = parsedTicket.arrivalStationCode,
+                                trainNumber = parsedTicket.trainNumber,
+                                travelDate = parsedTicket.travelDate,
+                                departureTime = parsedTicket.departureTime,
+                                arrivalTime = parsedTicket.arrivalTime
+                            )
+                            JourneyRepository.saveJourney(context, savedJourney)
+
+                            val data = workDataOf(
+                                "trainNumber" to parsedTicket.trainNumber,
+                                "pnr" to parsedTicket.pnr
+                            )
+                            val workRequest = PeriodicWorkRequestBuilder<JourneyTrackerWorker>(15, TimeUnit.MINUTES)
+                                .setInputData(data)
+                                .build()
+                            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                                "${parsedTicket.pnr}_${parsedTicket.trainNumber}",
+                                ExistingPeriodicWorkPolicy.UPDATE,
+                                workRequest
+                            )
+
+                            onBack()
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),

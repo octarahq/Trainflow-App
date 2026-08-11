@@ -1,7 +1,9 @@
 package com.octarahq.trainflow.ui.navigation
 
 sealed class Screen(val route: String, val title: String) {
-    object Home : Screen("home", "Accueil")
+    object Home : Screen("home?select={select}", "Accueil") {
+        fun createRoute(selectTrainId: String? = null) = if (selectTrainId != null) "home?select=$selectTrainId" else "home"
+    }
     object Trips : Screen("trips", "Mes trajets")
     object TrainInfo : Screen("train-info/{trainId}?speed={speed}", "Train Info") {
         fun createRoute(trainId: String, speed: Int? = null) = if (speed != null) "train-info/$trainId?speed=$speed" else "train-info/$trainId"

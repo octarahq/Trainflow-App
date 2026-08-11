@@ -93,8 +93,19 @@ fun MainScreen() {
                 navController = navController,
                 startDestination = Screen.Home.route,
             ) {
-                composable(Screen.Home.route) {
+                composable(
+                    route = Screen.Home.route,
+                    arguments = listOf(
+                        navArgument("select") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val selectTrainId = backStackEntry.arguments?.getString("select")
                     HomeScreen(
+                        selectTrainId = selectTrainId,
                         onOpenMenu = {
                             scope.launch { drawerState.open() }
                         },
@@ -116,7 +127,10 @@ fun MainScreen() {
                         onSearch = {
                             navController.navigate(Screen.Search.route) { launchSingleTop = true }
                         },
-                        onOpenTrainInfo = {}
+                        onOpenTrainInfo = { trainNumber, ref ->
+                            val id = ref ?: trainNumber
+                            navController.navigate(Screen.TrainInfo.createRoute(id, null)) { launchSingleTop = true }
+                        }
                     )
                 }
                 composable(Screen.Search.route) {
@@ -142,7 +156,12 @@ fun MainScreen() {
                     TrainInfoScreen(
                         trainId = trainId,
                         speedKmh = speed,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onLocateOnMap = { selectTrainId ->
+                            navController.navigate(Screen.Home.createRoute(selectTrainId)) {
+                                popUpTo(Screen.Home.route) { inclusive = true }
+                            }
+                        }
                     )
                 }
                 composable(
