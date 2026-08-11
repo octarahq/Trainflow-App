@@ -16,4 +16,12 @@ sealed class Screen(val route: String, val title: String) {
             return "ticket-result/$encoded"
         }
     }
+    object Update : Screen("update?tag={tag}&notes={notes}&apkUrl={apkUrl}", "Mise à jour") {
+        fun createRoute(tag: String, notes: String, apkUrl: String): String {
+            val encodedTag = java.net.URLEncoder.encode(tag, "UTF-8")
+            val encodedNotes = java.net.URLEncoder.encode(notes, "UTF-8")
+            val encodedUrl = java.net.URLEncoder.encode(apkUrl, "UTF-8")
+            return "update?tag=$encodedTag&notes=$encodedNotes&apkUrl=$encodedUrl"
+        }
+    }
 }

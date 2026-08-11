@@ -1,8 +1,11 @@
 package com.octarahq.trainflow.ui
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +16,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,8 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,12 +40,14 @@ import com.octarahq.trainflow.ui.screens.SearchScreen
 import com.octarahq.trainflow.ui.screens.TicketScanResultScreen
 import com.octarahq.trainflow.ui.screens.TrainInfoScreen
 import com.octarahq.trainflow.ui.screens.TripsScreen
+import com.octarahq.trainflow.ui.screens.UpdateScreen
 import com.octarahq.trainflow.ui.utils.AztecScanner
+import com.octarahq.trainflow.ui.utils.UpdateManager
 import kotlinx.coroutines.launch
 import java.net.URLDecoder
 
 @Composable
-fun MainScreen() {
+fun MainScreen(intent: Intent? = null) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -54,6 +58,23 @@ fun MainScreen() {
 
     val context = LocalContext.current
     var dropdownOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        UpdateManager.checkForUpdates(context)
+    }
+
+    LaunchedEffect(intent) {
+        if (intent != null && intent.getStringExtra("navigate_to") == "update") {
+            val tag = intent.getStringExtra("update_tag") ?: ""
+            val notes = intent.getStringExtra("update_notes") ?: ""
+            val apkUrl = intent.getStringExtra("update_apk_url") ?: ""
+            if (tag.isNotBlank() && apkUrl.isNotBlank()) {
+                navController.navigate(Screen.Update.createRoute(tag, notes, apkUrl)) {
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -188,6 +209,33 @@ fun MainScreen() {
                         },
                         onRescan = {
                             filePicker.launch(arrayOf("image/*", "application/pdf"))
+                        }
+                    )
+                }
+                composable(
+                    route = Screen.Update.route,
+                    arguments = listOf(
+                        navArgument("tag") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("notes") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("apkUrl") { type = NavType.StringType; defaultValue = "" }
+                    )
+                ) { backStackEntry ->
+                    val rawTag = backStackEntry.arguments?.getString("tag") ?: ""
+                    val rawNotes = backStackEntry.arguments?.getString("notes") ?: ""
+                    val rawApkUrl = backStackEntry.arguments?.getString("apkUrl") ?: ""
+
+                    val tag = try { URLDecoder.decode(rawTag, "UTF-8") } catch (e: Exception) { rawTag }
+                    val notes = try { URLDecoder.decode(rawNotes, "UTF-8") } catch (e: Exception) { rawNotes }
+                    val apkUrl = try { URLDecoder.decode(rawApkUrl, "UTF-8") } catch (e: Exception) { rawApkUrl }
+
+                    UpdateScreen(
+                        versionTag = tag,
+                        releaseNotes = notes,
+                        apkUrl = apkUrl,
+                        onBack = {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Home.route) { inclusive = true }
+                            }
                         }
                     )
                 }
