@@ -79,32 +79,6 @@ fun TripsScreen(
             status = "À l'heure",
             statusColor = TripsPalette.activeGreen,
             badgeColor = TripsPalette.purple
-        ),
-        TripItem(
-            date = "Demain, 15 Oct",
-            trainType = "TGV",
-            trainNumber = "6604",
-            departureTime = "08:32",
-            arrivalTime = "10:30",
-            departureStation = "Lyon Part-Dieu",
-            arrivalStation = "Paris Gare de Lyon",
-            duration = "1h 58m",
-            status = "Retard +12 min",
-            statusColor = TripsPalette.delayAmber,
-            badgeColor = TripsPalette.purple
-        ),
-        TripItem(
-            date = "Ven, 18 Oct",
-            trainType = "TER",
-            trainNumber = "86509",
-            departureTime = "11:47",
-            arrivalTime = "13:52",
-            departureStation = "Bordeaux Saint-Jean",
-            arrivalStation = "Toulouse Matabiau",
-            duration = "2h 05m",
-            status = "À l'heure",
-            statusColor = TripsPalette.activeGreen,
-            badgeColor = TripsPalette.teal
         )
     )
 

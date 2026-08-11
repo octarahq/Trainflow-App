@@ -8,4 +8,10 @@ sealed class Screen(val route: String, val title: String) {
     }
     object Search : Screen("search", "Rechercher")
     object Alerts : Screen("alerts", "Afficher les alertes")
+    object TicketResult : Screen("ticket-result/{rawData}", "Résultat Scan") {
+        fun createRoute(rawData: String): String {
+            val encoded = java.net.URLEncoder.encode(rawData, "UTF-8")
+            return "ticket-result/$encoded"
+        }
+    }
 }
