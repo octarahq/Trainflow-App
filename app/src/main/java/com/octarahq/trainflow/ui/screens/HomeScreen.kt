@@ -100,7 +100,8 @@ fun HomeScreen(
     selectTrainId: String? = null,
     onOpenMenu: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
-    onOpenTrainInfo: (String, Int?) -> Unit = { _, _ -> }
+    onOpenTrainInfo: (String, Int?) -> Unit = { _, _ -> },
+    onOpenNetworkStatus: () -> Unit = {}
 ) {
     var networkStatus by remember { mutableStateOf<NetworkStatusStats?>(null) }
     var liveVehicles by remember { mutableStateOf<List<InterpolatedJourney>>(emptyList()) }
@@ -261,7 +262,8 @@ fun HomeScreen(
                     } else {
                         onOpenMenu()
                     }
-                }
+                },
+                onOpenNetworkStatus = onOpenNetworkStatus
             )
 
             if (selectedTrain != null) {
@@ -534,7 +536,8 @@ fun OverlayActionButton(
 private fun HomeTopControls(
     modifier: Modifier = Modifier,
     isBack: Boolean = false,
-    onOpenMenu: () -> Unit
+    onOpenMenu: () -> Unit,
+    onOpenNetworkStatus: () -> Unit = {}
 ) {
     Row(
         modifier = modifier.padding(horizontal = 16.dp),
@@ -550,21 +553,13 @@ private fun HomeTopControls(
             )
         }
 
-        FloatingControlButton(onClick = {}) {
-            Box(modifier = Modifier.size(24.dp)) {
-                Icon(
-                    imageVector = Icons.Filled.Notifications,
-                    contentDescription = "Notifications",
-                    tint = TrainflowPalette.textPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(8.dp)
-                        .background(Color(0xFFFBBF24), CircleShape)
-                )
-            }
+        FloatingControlButton(onClick = onOpenNetworkStatus) {
+            Icon(
+                imageVector = Icons.Filled.Notifications,
+                contentDescription = "Notifications",
+                tint = TrainflowPalette.textPrimary,
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }

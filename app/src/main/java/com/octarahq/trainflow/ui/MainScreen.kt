@@ -114,6 +114,9 @@ fun MainScreen() {
                         },
                         onOpenTrainInfo = { trainId, speedKmh ->
                             navController.navigate(Screen.TrainInfo.createRoute(trainId, speedKmh)) { launchSingleTop = true }
+                        },
+                        onOpenNetworkStatus = {
+                            navController.navigate(Screen.Alerts.route) { launchSingleTop = true }
                         }
                     )
                 }
