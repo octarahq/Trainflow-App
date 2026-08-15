@@ -5,13 +5,13 @@ plugins {
 
 android {
     namespace = "com.octarahq.trainflow"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.octarahq.trainflow"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
+        targetSdk = 36
+        versionCode = 2
         versionName = "1.0"
         buildConfigField("String", "BASE_URL", "\"https://apitrainflow.orionhost.app\"")
     }
@@ -34,6 +34,17 @@ android {
         jvmTarget = "17"
     }
 
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            ndk {
+                debugSymbolLevel = "full"
+            }
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -48,7 +59,7 @@ dependencies {
     implementation("org.maplibre.gl:android-sdk:11.5.0")
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.activity:activity-compose:1.9.1")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
     implementation(composeBom)

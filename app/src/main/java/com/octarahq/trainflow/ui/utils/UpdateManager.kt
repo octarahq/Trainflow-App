@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -43,8 +44,6 @@ interface GithubApiService {
 }
 
 object UpdateManager {
-    private const val PREFS_NAME = "trainflow_update_prefs"
-    private const val KEY_INSTALLED_VERSION = "installed_release_version"
     private const val NOTIFICATION_CHANNEL_ID = "trainflow_updates_channel"
     private const val NOTIFICATION_ID = 9988
 
@@ -59,16 +58,36 @@ object UpdateManager {
     }
 
     fun getInstalledVersion(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(KEY_INSTALLED_VERSION, null)
+        return try {
+            val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            pInfo.versionName
+        } catch (e: Exception) {
+            "1.0.0"
+        }
     }
 
-    fun saveInstalledVersion(context: Context, version: String) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString(KEY_INSTALLED_VERSION, version).apply()
+    private fun isInstalledFromPlayStore(context: Context): Boolean {
+        return try {
+            val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getInstallerPackageName(context.packageName)
+            }
+            installer == "com.android.vending"
+        } catch (e: Exception) {
+            false
+        }
     }
 
     suspend fun checkForUpdates(context: Context): GithubRelease? {
+        if (isInstalledFromPlayStore(context)) return null
+
         return withContext(Dispatchers.IO) {
             try {
                 val release = githubApi.getLatestRelease()
@@ -82,12 +101,7 @@ object UpdateManager {
                     it.content_type?.contains("package-archive", ignoreCase = true) == true
                 } ?: return@withContext null
 
-                val installedVersion = getInstalledVersion(context)
-
-                if (installedVersion == null) {
-                    saveInstalledVersion(context, tag)
-                    return@withContext null
-                }
+                val installedVersion = getInstalledVersion(context) ?: "1.0.0"
 
                 if (compareVersions(tag, installedVersion) > 0) {
                     sendUpdateNotification(context, release, apkAsset.browser_download_url)
@@ -221,8 +235,6 @@ object UpdateManager {
 
     private fun installApk(context: Context, apkFile: File, tag: String) {
         if (!apkFile.exists()) return
-
-        saveInstalledVersion(context, tag)
 
         val apkUri: Uri = FileProvider.getUriForFile(
             context,

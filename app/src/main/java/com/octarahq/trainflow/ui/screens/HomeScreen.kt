@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -257,6 +259,7 @@ fun HomeScreen(
             HomeTopControls(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(top = 12.dp),
                 isBack = selectedTrain != null,
                 onOpenMenu = {
@@ -315,7 +318,10 @@ fun HomeScreen(
                                 }
                             },
                             onClose = { selectedTrain = null },
-                            modifier = Modifier.padding(12.dp).padding(bottom = 12.dp)
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .navigationBarsPadding()
+                                .padding(bottom = 12.dp)
                         )
                     }
                 }
@@ -604,7 +610,9 @@ private fun HomeBottomSheet(
         shadowElevation = 12.dp
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Surface(

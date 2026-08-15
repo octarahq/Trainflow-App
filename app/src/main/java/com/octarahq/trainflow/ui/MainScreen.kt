@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
@@ -333,6 +334,7 @@ fun MainScreen(intent: Intent? = null) {
                     },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .align(androidx.compose.ui.Alignment.BottomCenter)
                 )
             }
