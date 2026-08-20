@@ -11,8 +11,8 @@ android {
         applicationId = "com.octarahq.trainflow"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0"
+        versionCode = 4
+        versionName = "1.1.0"
         buildConfigField("String", "BASE_URL", "\"https://apitrainflow.orionhost.app\"")
     }
 
