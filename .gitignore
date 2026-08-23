@@ -33,5 +33,7 @@ app/build/
 /.*
 !/.github/
 !/.github/**
+!/.orion/
+!/.orion/**
 scratch/
 node_modules/
