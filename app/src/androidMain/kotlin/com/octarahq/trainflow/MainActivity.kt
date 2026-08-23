@@ -1,4 +1,5 @@
 package com.octarahq.trainflow
+import android.content.Context
 
 import android.Manifest
 import android.content.Intent
@@ -14,8 +15,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.octarahq.trainflow.ui.MainScreen
+import com.octarahq.trainflow.ui.MainApp
 import org.maplibre.android.MapLibre
+
+object AppContextHolder {
+    lateinit var context: Context
+    var currentIntent: Intent? = null
+}
 
 class MainActivity : ComponentActivity() {
     private var currentIntentState by mutableStateOf<Intent?>(null)
@@ -23,14 +29,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        AppContextHolder.context = this.applicationContext
         MapLibre.getInstance(this)
         
         requestNotificationPermission()
         currentIntentState = intent
+        AppContextHolder.currentIntent = intent
 
         setContent {
             MaterialTheme {
-                MainScreen(intent = currentIntentState)
+                MainApp()
             }
         }
     }
@@ -39,6 +47,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         currentIntentState = intent
+        AppContextHolder.currentIntent = intent
     }
 
     private fun requestNotificationPermission() {

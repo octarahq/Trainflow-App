@@ -7,8 +7,8 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.octarahq.trainflow.ApiClient
-import com.octarahq.trainflow.InterpolatedJourney
+import com.octarahq.trainflow.network.apiService
+import com.octarahq.trainflow.network.InterpolatedJourney
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -45,7 +45,7 @@ class JourneyTrackerWorker(
 
             if (savedJourney.vehicleJourneyRef != null) {
                 try {
-                    val response = ApiClient.apiService.getSingleVehicle(savedJourney.vehicleJourneyRef!!)
+                    val response = apiService.getSingleVehicle(savedJourney.vehicleJourneyRef!!)
                     activeJourney = response.vehicle
                 } catch (e: Exception) {
                     savedJourney.vehicleJourneyRef = null
@@ -53,7 +53,7 @@ class JourneyTrackerWorker(
             }
 
             if (activeJourney == null) {
-                val liveResponse = ApiClient.apiService.getLiveVehicles()
+                val liveResponse = apiService.getLiveVehicles()
                 activeJourney = liveResponse.vehicles.firstOrNull {
                     it.journey.TrainNumbers?.TrainNumberRef == trainNumber
                 }

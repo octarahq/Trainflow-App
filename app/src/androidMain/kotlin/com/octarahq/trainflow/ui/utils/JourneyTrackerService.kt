@@ -10,8 +10,8 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.octarahq.trainflow.ApiClient
-import com.octarahq.trainflow.InterpolatedJourney
+import com.octarahq.trainflow.network.apiService
+import com.octarahq.trainflow.network.InterpolatedJourney
 import com.octarahq.trainflow.MainActivity
 import com.octarahq.trainflow.R
 import kotlinx.coroutines.CoroutineScope
@@ -165,7 +165,7 @@ class JourneyTrackerService : Service() {
 
                         if (journey.vehicleJourneyRef != null) {
                             try {
-                                val response = ApiClient.apiService.getSingleVehicle(journey.vehicleJourneyRef!!)
+                                val response = apiService.getSingleVehicle(journey.vehicleJourneyRef!!)
                                 activeJourney = response.vehicle
                             } catch (e: Exception) {
                                 journey.vehicleJourneyRef = null
@@ -173,7 +173,7 @@ class JourneyTrackerService : Service() {
                         }
 
                         if (activeJourney == null) {
-                            val liveResponse = ApiClient.apiService.getLiveVehicles()
+                            val liveResponse = apiService.getLiveVehicles()
                             activeJourney = liveResponse.vehicles.firstOrNull {
                                 it.journey.TrainNumbers?.TrainNumberRef == journey.trainNumber
                             }

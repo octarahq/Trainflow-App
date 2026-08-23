@@ -15,9 +15,7 @@ import com.octarahq.trainflow.MainActivity
 import com.octarahq.trainflow.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.GET
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -38,23 +36,49 @@ data class GithubAsset(
     val size: Long = 0
 )
 
-interface GithubApiService {
-    @GET("repos/octarahq/Trainflow-App/releases/latest")
-    suspend fun getLatestRelease(): GithubRelease
-}
-
 object UpdateManager {
     private const val NOTIFICATION_CHANNEL_ID = "trainflow_updates_channel"
     private const val NOTIFICATION_ID = 9988
 
     private val VERSION_REGEX = Regex("""^v?(\d+)\.(\d+)(?:\.(\d+))?.*""", RegexOption.IGNORE_CASE)
 
-    private val githubApi: GithubApiService by lazy {
-        Retrofit.Builder()
-            .baseUrl("https://api.github.com/")
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(GithubApiService::class.java)
+    private suspend fun getLatestRelease(): GithubRelease = withContext(Dispatchers.IO) {
+        val url = URL("https://api.github.com/repos/octarahq/Trainflow-App/releases/latest")
+        val connection = url.openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+        connection.connectTimeout = 15000
+        connection.readTimeout = 15000
+
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw Exception("Failed to get release: ${connection.responseCode}")
+        }
+
+        val jsonStr = connection.inputStream.bufferedReader().use { it.readText() }
+        val jsonObj = JSONObject(jsonStr)
+
+        val tagName = jsonObj.optString("tag_name", "")
+        val name = jsonObj.optString("name", null)
+        val body = jsonObj.optString("body", null)
+        val publishedAt = jsonObj.optString("published_at", null)
+
+        val assetsArray = jsonObj.optJSONArray("assets")
+        val assets = mutableListOf<GithubAsset>()
+        if (assetsArray != null) {
+            for (i in 0 until assetsArray.length()) {
+                val assetObj = assetsArray.getJSONObject(i)
+                assets.add(
+                    GithubAsset(
+                        name = assetObj.optString("name", ""),
+                        content_type = assetObj.optString("content_type", null),
+                        browser_download_url = assetObj.optString("browser_download_url", ""),
+                        size = assetObj.optLong("size", 0)
+                    )
+                )
+            }
+        }
+
+        GithubRelease(tagName, name, body, publishedAt, assets)
     }
 
     fun getInstalledVersion(context: Context): String? {
@@ -90,7 +114,7 @@ object UpdateManager {
 
         return withContext(Dispatchers.IO) {
             try {
-                val release = githubApi.getLatestRelease()
+                val release = getLatestRelease()
                 val tag = release.tag_name.trim()
 
                 if (tag.isBlank() || !VERSION_REGEX.matches(tag)) return@withContext null

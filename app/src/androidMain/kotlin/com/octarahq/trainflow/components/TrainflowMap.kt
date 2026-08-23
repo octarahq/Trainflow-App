@@ -12,7 +12,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.octarahq.trainflow.InterpolatedJourney
+import com.octarahq.trainflow.network.InterpolatedJourney
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -24,13 +24,13 @@ import org.maplibre.android.style.layers.PropertyFactory.*
 import org.maplibre.android.style.sources.VectorSource
 import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
-import com.octarahq.trainflow.ApiClient
+import com.octarahq.trainflow.network.apiService
 import com.octarahq.trainflow.ui.utils.TrainTrackingData
 import androidx.compose.ui.unit.dp
 
 @SuppressLint("ClickableViewAccessibility")
 @Composable
-fun TrainflowMap(
+actual fun TrainflowMap(
     trains: List<InterpolatedJourney>,
     trackingData: Map<String, TrainTrackingData>,
     selectedTrain: InterpolatedJourney?,
@@ -72,7 +72,7 @@ fun TrainflowMap(
                     val ignLayer = org.maplibre.android.style.layers.RasterLayer("ign-layer", "ign-source")
                     style.addLayer(ignLayer)
 
-                    val baseUrl = ApiClient.BASE_URL.removeSuffix("/")
+                    val baseUrl = apiService.baseUrl.removeSuffix("/")
                     val railsSource = org.maplibre.android.style.sources.GeoJsonSource("rails", java.net.URI.create("$baseUrl/shapes/lignes_sncf.geojson"))
                     style.addSource(railsSource)
                     
@@ -229,17 +229,10 @@ fun TrainflowMap(
                 }
                 
                 if (train != null && train.lat != 0.0 && train.lon != 0.0) {
-                    var cLat = train.lat
-                    var cLon = train.lon
                     val data = trackingData[targetSmartId]
-                    if (data != null && data.lastUpdate != data.currentUpdate) {
-                        val timeDiff = data.currentUpdate - data.lastUpdate
-                        val elapsed = currentTime - data.currentUpdate
-                        val ratio = (elapsed.toDouble() / timeDiff).coerceAtMost(1.5)
-                        cLat = data.currentLat + (data.currentLat - data.lastLat) * ratio
-                        cLon = data.currentLon + (data.currentLon - data.lastLon) * ratio
-                    }
-                    mapLibreMap?.moveCamera(CameraUpdateFactory.newLatLng(LatLng(cLat, cLon)))
+                    val zoom = mapLibreMap?.cameraPosition?.zoom ?: 10.0
+                    val interp = com.octarahq.trainflow.ui.utils.getSmoothInterpolatedPosition(data, train.lat, train.lon, currentTime, zoom)
+                    mapLibreMap?.moveCamera(CameraUpdateFactory.newLatLng(LatLng(interp.lat, interp.lon)))
                 }
             }
             

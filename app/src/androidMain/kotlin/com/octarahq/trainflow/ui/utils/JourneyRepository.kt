@@ -4,23 +4,7 @@ import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
-data class SavedJourney(
-    val pnr: String,
-    val passengerName: String,
-    val departureStationCode: String,
-    val arrivalStationCode: String,
-    val trainNumber: String,
-    val travelDate: String,
-    val departureTime: String = "--:--",
-    val arrivalTime: String = "--:--",
-    val addedAt: Long = System.currentTimeMillis(),
-    val isActive: Boolean = true,
-    var vehicleJourneyRef: String? = null,
-    val notifyPlatform: Boolean = true,
-    val notifyTerminus: Boolean = true,
-    val notifyDelay: Boolean = true,
-    val categoryRef: String = ""
-)
+
 
 object JourneyRepository {
 
@@ -64,7 +48,7 @@ object JourneyRepository {
         }
     }
 
-    fun addJourneyFromTrain(context: Context, train: com.octarahq.trainflow.InterpolatedJourney) {
+    fun addJourneyFromTrain(context: Context, train: com.octarahq.trainflow.network.InterpolatedJourney) {
         val trainNumber = train.journey.TrainNumbers?.TrainNumberRef ?: train.journey.PublishedLineName
         val pnr = "SUIVI-${trainNumber.take(4)}"
 
@@ -144,7 +128,7 @@ object JourneyRepository {
         saveList(context, currentList)
     }
 
-    fun toggleFollowJourney(context: Context, train: com.octarahq.trainflow.InterpolatedJourney): Boolean {
+    fun toggleFollowJourney(context: Context, train: com.octarahq.trainflow.network.InterpolatedJourney): Boolean {
         val trainNumber = train.journey.TrainNumbers?.TrainNumberRef ?: train.journey.PublishedLineName
         val vehicleRef = train.journey.VehicleJourneyRef
         return if (isJourneyFollowed(context, trainNumber, vehicleRef)) {
