@@ -49,7 +49,7 @@ jobs:
 
       - name: Build PWA
         if: github.event.release.prerelease == false
-        run: ./gradlew :app:wasmJsBrowserProductionExecutableDistribution
+        run: ./gradlew :app:wasmJsBrowserDistribution
 
       - name: Setup Node.js (For Orion Deploy)
         if: github.event.release.prerelease == false
