@@ -6,10 +6,10 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-actual typealias PlatformContext = Context
+actual class PlatformContext(val androidContext: Context)
 
 actual fun PlatformContext.copyToClipboard(text: String) {
-    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+    val clipboard = androidContext.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
     if (clipboard != null) {
         val clip = android.content.ClipData.newPlainText("Trainflow", text)
         clipboard.setPrimaryClip(clip)
@@ -23,15 +23,16 @@ actual fun PlatformContext.shareText(text: String) {
         type = "text/plain"
     }
     val shareIntent = Intent.createChooser(sendIntent, "Partager")
-    startActivity(shareIntent)
+    shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    androidContext.startActivity(shareIntent)
 }
 
 actual fun PlatformContext.showToast(message: String) {
-    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    Toast.makeText(androidContext, message, Toast.LENGTH_SHORT).show()
 }
 
 actual val currentPlatformContext: PlatformContext
-    @Composable get() = LocalContext.current
+    @Composable get() = PlatformContext(LocalContext.current)
 actual fun getAppVersion(): String = "1.0.1"
 actual fun isPullToRefreshSupported(): Boolean = true
 

@@ -1,4 +1,4 @@
-package com.octarahq.trainflow.ui.components
+package com.octarahq.trainflow.components
 
 import android.annotation.SuppressLint
 import android.graphics.Color
@@ -38,8 +38,8 @@ actual fun TrainflowMap(
     onCameraLockChange: (Boolean) -> Unit,
     onMapInteract: () -> Unit,
     onTrainClick: (InterpolatedJourney) -> Unit,
-    targetLat: Double? = null,
-    targetLon: Double? = null
+    targetLat: Double?,
+    targetLon: Double?
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
