@@ -1,4 +1,4 @@
-name: Build and Release Signed AAB
+name: Build and Release Signed AAB and APK
 
 on:
   release:
@@ -31,15 +31,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Release App Bundle
+      - name: Build Release AAB and APK
         env:
           KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew bundleRelease
+        run: ./gradlew bundleRelease assembleRelease
 
-      - name: Prepare AAB File
+      - name: Prepare Artifacts
         id: prep
         run: |
           TAG_NAME="${{ github.event.release.tag_name }}"
@@ -47,13 +47,22 @@ jobs:
             TAG_NAME="release"
           fi
           AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
-          FILENAME="trainflow-${TAG_NAME}.aab"
-          cp "$AAB_PATH" "$FILENAME"
-          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          AAB_FILENAME="trainflow-${TAG_NAME}.aab"
+          cp "$AAB_PATH" "$AAB_FILENAME"
+          
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          APK_FILENAME="trainflow-${TAG_NAME}.apk"
+          cp "$APK_PATH" "$APK_FILENAME"
+          
+          echo "aab_filename=$AAB_FILENAME" >> $GITHUB_OUTPUT
+          echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
 
-      - name: Upload AAB to GitHub Release
+      - name: Upload Artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.prep.outputs.filename }}
+          files: |
+            ${{ steps.prep.outputs.aab_filename }}
+            ${{ steps.prep.outputs.apk_filename }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
