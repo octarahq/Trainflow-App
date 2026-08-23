@@ -69,6 +69,7 @@ jobs:
           cp -r app/build/dist/wasmJs/productionExecutable/* deploy_out/public/
           cp server.js deploy_out/
           cp package.json deploy_out/
+          cp orion.config.json deploy_out/
           cd deploy_out
           orion deploy
         env:
