@@ -1,10 +1,6 @@
-name: Build and Release APK
+name: Build and Release Signed AAB
 
 on:
-  push:
-    tags:
-      - 'v*'
-      - '*.*.*'
   release:
     types: [published]
 
@@ -13,6 +9,7 @@ permissions:
 
 jobs:
   build-android:
+    if: github.event.release.prerelease == false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -25,25 +22,36 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
+      - name: Decode Keystore
+        env:
+          ENCODED_STRING: ${{ secrets.KEYSTORE_FILE_BASE64 }}
+        run: |
+          echo $ENCODED_STRING | base64 -di > release.keystore
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
+      - name: Build Release App Bundle
+        env:
+          KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew bundleRelease
 
-      - name: Prepare APK File
+      - name: Prepare AAB File
         id: prep
         run: |
-          TAG_NAME="${GITHUB_REF_NAME}"
-          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "main" ]; then
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG_NAME" ]; then
             TAG_NAME="release"
           fi
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          FILENAME="trainflow-${TAG_NAME}.apk"
-          cp "$APK_PATH" "$FILENAME"
+          AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
+          FILENAME="trainflow-${TAG_NAME}.aab"
+          cp "$AAB_PATH" "$FILENAME"
           echo "filename=$FILENAME" >> $GITHUB_OUTPUT
 
-      - name: Upload APK to GitHub Release
+      - name: Upload AAB to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.prep.outputs.filename }}
