@@ -8,8 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  build-android:
-    if: github.event.release.prerelease == false
+  build-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -31,13 +30,26 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Release AAB and APK
+      - name: Build Release APK
         env:
           KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew bundleRelease assembleRelease
+        run: ./gradlew assembleRelease
+
+      - name: Build Release AAB
+        if: github.event.release.prerelease == false
+        env:
+          KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew bundleRelease
+
+      - name: Build PWA
+        if: github.event.release.prerelease == false
+        run: ./gradlew :app:wasmJsBrowserProductionExecutableDistribution
 
       - name: Prepare Artifacts
         id: prep
@@ -46,23 +58,39 @@ jobs:
           if [ -z "$TAG_NAME" ]; then
             TAG_NAME="release"
           fi
-          AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
-          AAB_FILENAME="trainflow-${TAG_NAME}.aab"
-          cp "$AAB_PATH" "$AAB_FILENAME"
           
+          # APK (Toujours généré)
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           APK_FILENAME="trainflow-${TAG_NAME}.apk"
           cp "$APK_PATH" "$APK_FILENAME"
-          
-          echo "aab_filename=$AAB_FILENAME" >> $GITHUB_OUTPUT
           echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
+          
+          # AAB et PWA (Seulement pour les full releases)
+          if [ "${{ github.event.release.prerelease }}" == "false" ]; then
+            AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
+            AAB_FILENAME="trainflow-${TAG_NAME}.aab"
+            cp "$AAB_PATH" "$AAB_FILENAME"
+            echo "aab_filename=$AAB_FILENAME" >> $GITHUB_OUTPUT
+            
+            # Zip de la PWA pour être téléchargeable dans les releases Github
+            PWA_DIR="app/build/dist/wasmJs/productionExecutable"
+            PWA_FILENAME="trainflow-pwa-${TAG_NAME}.zip"
+            if [ -d "$PWA_DIR" ]; then
+              cd "$PWA_DIR"
+              zip -r "../../../../../$PWA_FILENAME" .
+              cd -
+              echo "pwa_filename=$PWA_FILENAME" >> $GITHUB_OUTPUT
+            fi
+          fi
 
       - name: Upload Artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ steps.prep.outputs.aab_filename }}
             ${{ steps.prep.outputs.apk_filename }}
+            ${{ steps.prep.outputs.aab_filename }}
+            ${{ steps.prep.outputs.pwa_filename }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
