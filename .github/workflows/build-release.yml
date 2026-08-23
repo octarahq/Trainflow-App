@@ -51,6 +51,24 @@ jobs:
         if: github.event.release.prerelease == false
         run: ./gradlew :app:wasmJsBrowserProductionExecutableDistribution
 
+      - name: Setup Node.js (For Orion Deploy)
+        if: github.event.release.prerelease == false
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install Orion CLI
+        if: github.event.release.prerelease == false
+        run: npm i -g @orionhosting/cli@latest
+
+      - name: Deploy PWA to Orion
+        if: github.event.release.prerelease == false
+        run: orion deploy
+        env:
+          ORION_TOKEN: ${{ secrets.ORION_TOKEN }}
+          ORION_SERVER_ID: ${{ vars.ORION_SERVER_ID }}
+
       - name: Prepare Artifacts
         id: prep
         run: |
@@ -65,22 +83,12 @@ jobs:
           cp "$APK_PATH" "$APK_FILENAME"
           echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
           
-          # AAB et PWA (Seulement pour les full releases)
+          # AAB (Seulement pour les full releases)
           if [ "${{ github.event.release.prerelease }}" == "false" ]; then
             AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
             AAB_FILENAME="trainflow-${TAG_NAME}.aab"
             cp "$AAB_PATH" "$AAB_FILENAME"
             echo "aab_filename=$AAB_FILENAME" >> $GITHUB_OUTPUT
-            
-            # Zip de la PWA pour être téléchargeable dans les releases Github
-            PWA_DIR="app/build/dist/wasmJs/productionExecutable"
-            PWA_FILENAME="trainflow-pwa-${TAG_NAME}.zip"
-            if [ -d "$PWA_DIR" ]; then
-              cd "$PWA_DIR"
-              zip -r "../../../../../$PWA_FILENAME" .
-              cd -
-              echo "pwa_filename=$PWA_FILENAME" >> $GITHUB_OUTPUT
-            fi
           fi
 
       - name: Upload Artifacts to GitHub Release
@@ -89,8 +97,8 @@ jobs:
           files: |
             ${{ steps.prep.outputs.apk_filename }}
             ${{ steps.prep.outputs.aab_filename }}
-            ${{ steps.prep.outputs.pwa_filename }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 
