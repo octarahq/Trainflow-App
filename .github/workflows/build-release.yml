@@ -64,7 +64,13 @@ jobs:
 
       - name: Deploy PWA to Orion
         if: github.event.release.prerelease == false
-        run: orion deploy
+        run: |
+          mkdir -p deploy_out/public
+          cp -r app/build/dist/wasmJs/productionExecutable/* deploy_out/public/
+          cp server.js deploy_out/
+          cp package.json deploy_out/
+          cd deploy_out
+          orion deploy
         env:
           ORION_TOKEN: ${{ secrets.ORION_TOKEN }}
           ORION_SERVER_ID: ${{ vars.ORION_SERVER_ID }}

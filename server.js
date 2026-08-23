@@ -3,7 +3,7 @@ const path = require('path');
 const app = express();
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const wasmDistPath = path.join(__dirname, 'app', 'build', 'dist', 'wasmJs', 'productionExecutable');
+const wasmDistPath = path.join(__dirname, 'public');
 
 app.use(express.static(wasmDistPath));
 
