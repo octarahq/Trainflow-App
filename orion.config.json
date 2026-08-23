@@ -1,0 +1,33 @@
+{
+    "$schema": "https://orionhost.xyz/cli.schema.json",
+    "deploy": {
+        "clean": false,
+        "exclude": [
+            ".git",
+            ".gradle",
+            ".idea",
+            "build",
+            "gradle",
+            "app/src",
+            "app/build/classes",
+            "app/build/compileSync",
+            "app/build/compose",
+            "app/build/generated",
+            "app/build/intermediates",
+            "app/build/klib",
+            "app/build/kotlin",
+            "app/build/kotlin-multiplatform-resources",
+            "app/build/outputs",
+            "app/build/processedResources",
+            "app/build/tmp",
+            "kotlin-js-store",
+            "app/webpack.config.d",
+            "webpack.config.d",
+            "*.gradle.kts",
+            "gradle.properties",
+            "gradlew*",
+            "local.properties",
+            ".github"
+        ]
+    }
+}

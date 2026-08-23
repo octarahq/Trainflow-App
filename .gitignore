@@ -34,3 +34,4 @@ app/build/
 !/.github/
 !/.github/**
 scratch/
+node_modules/
