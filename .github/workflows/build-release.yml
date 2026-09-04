@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  build-release:
+  build-apk:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -17,9 +17,9 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          distribution: "temurin"
+          java-version: "17"
+          cache: "gradle"
 
       - name: Decode Keystore
         env:
@@ -38,8 +38,36 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-artifact
+          path: app/build/outputs/apk/release/*.apk
+
+  build-aab:
+    runs-on: ubuntu-latest
+    if: github.event.release.prerelease == false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+          cache: "gradle"
+
+      - name: Decode Keystore
+        env:
+          ENCODED_STRING: ${{ secrets.KEYSTORE_FILE_BASE64 }}
+        run: |
+          echo $ENCODED_STRING | base64 -di > release.keystore
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: Build Release AAB
-        if: github.event.release.prerelease == false
         env:
           KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -47,23 +75,62 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew bundleRelease
 
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aab-artifact
+          path: app/build/outputs/bundle/release/*.aab
+
+  build-pwa:
+    runs-on: ubuntu-latest
+    if: github.event.release.prerelease == false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+          cache: "gradle"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: Build PWA
-        if: github.event.release.prerelease == false
         run: ./gradlew :app:wasmJsBrowserDistribution
 
-      - name: Setup Node.js (For Orion Deploy)
-        if: github.event.release.prerelease == false
+      - name: Upload PWA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwa-artifact
+          path: app/build/dist/wasmJs/productionExecutable/
+
+  deploy-pwa:
+    runs-on: ubuntu-latest
+    needs: build-pwa
+    if: github.event.release.prerelease == false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download PWA Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pwa-artifact
+          path: app/build/dist/wasmJs/productionExecutable/
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
 
       - name: Install Orion CLI
-        if: github.event.release.prerelease == false
         run: npm i -g @orionhosting/cli@latest
 
       - name: Deploy PWA to Orion
-        if: github.event.release.prerelease == false
         run: |
           mkdir -p deploy_out/public
           cp -r app/build/dist/wasmJs/productionExecutable/* deploy_out/public/
@@ -76,26 +143,47 @@ jobs:
           ORION_TOKEN: ${{ secrets.ORION_TOKEN }}
           ORION_SERVER_ID: ${{ vars.ORION_SERVER_ID }}
 
-      - name: Prepare Artifacts
+  upload-release:
+    runs-on: ubuntu-latest
+    needs: [build-apk, build-aab]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download APK Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: apk-artifact
+          path: ./apk-files
+
+      - name: Download AAB Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aab-artifact
+          path: ./aab-files
+        continue-on-error: true
+
+      - name: Prepare Release Assets
         id: prep
         run: |
           TAG_NAME="${{ github.event.release.tag_name }}"
           if [ -z "$TAG_NAME" ]; then
             TAG_NAME="release"
           fi
-          
-          # APK (Toujours généré)
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          APK_FILENAME="trainflow-${TAG_NAME}.apk"
-          cp "$APK_PATH" "$APK_FILENAME"
-          echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
-          
-          # AAB (Seulement pour les full releases)
-          if [ "${{ github.event.release.prerelease }}" == "false" ]; then
-            AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
-            AAB_FILENAME="trainflow-${TAG_NAME}.aab"
-            cp "$AAB_PATH" "$AAB_FILENAME"
-            echo "aab_filename=$AAB_FILENAME" >> $GITHUB_OUTPUT
+
+          # APK
+          if [ -f "apk-files"/*.apk ]; then
+            APK_FILE=$(find apk-files -name "*.apk" | head -n 1)
+            cp "$APK_FILE" "trainflow-${TAG_NAME}.apk"
+            echo "apk_filename=trainflow-${TAG_NAME}.apk" >> $GITHUB_OUTPUT
+          fi
+
+          # AAB
+          if [ -f "aab-files"/*.aab ]; then
+            AAB_FILE=$(find aab-files -name "*.aab" | head -n 1)
+            cp "$AAB_FILE" "trainflow-${TAG_NAME}.aab"
+            echo "aab_filename=trainflow-${TAG_NAME}.aab" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload Artifacts to GitHub Release
@@ -106,6 +194,3 @@ jobs:
             ${{ steps.prep.outputs.aab_filename }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-
