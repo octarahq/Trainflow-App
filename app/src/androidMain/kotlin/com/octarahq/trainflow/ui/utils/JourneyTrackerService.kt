@@ -20,6 +20,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -30,6 +32,7 @@ class JourneyTrackerService : Service() {
     private lateinit var notificationManager: NotificationManager
     private val notifiedTerminusAlerts = mutableSetOf<String>()
     private val notifiedPlatformAlerts = mutableSetOf<String>()
+    private val json = Json { ignoreUnknownKeys = true }
 
     companion object {
         private const val LIVE_CHANNEL_ID = "trainflow_live_tracking_v3"
@@ -256,8 +259,8 @@ class JourneyTrackerService : Service() {
                                             currentList.remove(itemToFinish)
                                             currentList.add(finished)
                                             val prefs = applicationContext.getSharedPreferences("trainflow_journeys_prefs", Context.MODE_PRIVATE)
-                                            val json = com.google.gson.Gson().toJson(currentList)
-                                            prefs.edit().putString("saved_journeys", json).apply()
+                                            val jsonStr = json.encodeToString(currentList)
+                                            prefs.edit().putString("saved_journeys_list", jsonStr).apply()
                                         }
                                     }
                                 }
@@ -402,7 +405,7 @@ class JourneyTrackerService : Service() {
         notification.extras.putString("android.shortCriticalText", chipText)
         notification.extras.putString("android.substName", "Trainflow")
 
-        if (Build.VERSION.SDK_INT >= 36) {
+        if (Build.VERSION.SDK_INT >= 35) {
             try {
                 val method = notification.javaClass.getMethod("setShortCriticalText", CharSequence::class.java)
                 method.invoke(notification, chipText)

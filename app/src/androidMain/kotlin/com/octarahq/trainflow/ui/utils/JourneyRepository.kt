@@ -1,36 +1,21 @@
 package com.octarahq.trainflow.ui.utils
 
 import android.content.Context
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 
 
 object JourneyRepository {
 
     private const val PREFS_NAME = "trainflow_journeys_prefs"
     private const val KEY_JOURNEYS = "saved_journeys_list"
-    private val gson = Gson()
+    private val json = Json { ignoreUnknownKeys = true }
 
     fun getJourneys(context: Context): List<SavedJourney> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val json = prefs.getString(KEY_JOURNEYS, null) ?: return emptyList()
+        val jsonStr = prefs.getString(KEY_JOURNEYS, null) ?: return emptyList()
         return try {
-            val type = object : TypeToken<List<SavedJourney>>() {}.type
-            val rawList: List<SavedJourney>? = gson.fromJson(json, type)
-            rawList?.map { journey ->
-                journey.copy(
-                    pnr = journey.pnr ?: "SUIVI",
-                    passengerName = journey.passengerName ?: "Suivi en direct",
-                    departureStationCode = journey.departureStationCode ?: "",
-                    arrivalStationCode = journey.arrivalStationCode ?: "",
-                    trainNumber = journey.trainNumber ?: "",
-                    travelDate = journey.travelDate ?: "Aujourd'hui",
-                    departureTime = journey.departureTime ?: "--:--",
-                    arrivalTime = journey.arrivalTime ?: "--:--",
-                    categoryRef = journey.categoryRef ?: ""
-                )
-            } ?: emptyList()
+            json.decodeFromString<List<SavedJourney>>(jsonStr)
         } catch (e: Exception) {
             emptyList()
         }
@@ -204,7 +189,7 @@ object JourneyRepository {
 
     private fun saveList(context: Context, list: List<SavedJourney>) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val json = gson.toJson(list)
-        prefs.edit().putString(KEY_JOURNEYS, json).apply()
+        val jsonStr = json.encodeToString(list)
+        prefs.edit().putString(KEY_JOURNEYS, jsonStr).apply()
     }
 }
