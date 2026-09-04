@@ -33,7 +33,7 @@ actual fun PlatformContext.showToast(message: String) {
 
 actual val currentPlatformContext: PlatformContext
     @Composable get() = PlatformContext(LocalContext.current)
-actual fun getAppVersion(): String = "1.0.2"
+actual fun getAppVersion(): String = "1.0.3"
 actual fun isPullToRefreshSupported(): Boolean = true
 
 actual fun snapToRailNetwork(lat: Double, lon: Double): Pair<Double, Double> = Pair(lat, lon)

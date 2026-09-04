@@ -1,6 +1,6 @@
 plugins {
-    id("com.android.application")
     id("org.jetbrains.kotlin.multiplatform")
+    id("com.android.application")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
@@ -8,15 +8,14 @@ plugins {
 
 kotlin {
     androidTarget {
-        compilations.all {
-            kotlinOptions {
-                jvmTarget = "17"
-            }
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
     
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
     wasmJs {
-        moduleName = "trainflowApp"
+        outputModuleName.set("trainflowApp")
         browser {
             val rootDirPath = project.rootDir.path
             val projectDirPath = project.projectDir.path
@@ -33,7 +32,7 @@ kotlin {
     }
 
     sourceSets {
-        val commonMain by getting {
+        getByName("commonMain") {
             dependencies {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
@@ -53,15 +52,15 @@ kotlin {
             }
         }
 
-        val androidMain by getting {
+        getByName("androidMain") {
             dependencies {
                 implementation("androidx.core:core-ktx:1.13.1")
                 implementation("androidx.activity:activity-compose:1.9.1")
                 
                 implementation("org.maplibre.gl:android-sdk:11.5.0")
                 implementation("com.google.android.gms:play-services-location:21.0.1")
-                implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")
-                implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
+                implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
+                implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
                 implementation("androidx.exifinterface:exifinterface:1.3.7")
                 implementation("androidx.work:work-runtime-ktx:2.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
@@ -71,7 +70,7 @@ kotlin {
             }
         }
 
-        val wasmJsMain by getting {
+        getByName("wasmJsMain") {
             dependencies {
                 implementation("io.ktor:ktor-client-core:3.0.0")
             }
@@ -81,14 +80,14 @@ kotlin {
 
 android {
     namespace = "com.octarahq.trainflow"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.octarahq.trainflow"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 4
-        versionName = "1.0.2"
+        targetSdk = 36
+        versionCode = 5
+        versionName = "1.0.3"
         buildConfigField("String", "BASE_URL", "\"https://apitrainflow.orionhost.app\"")
     }
 
@@ -132,14 +131,4 @@ android {
     }
 }
 
-afterEvaluate {
-    tasks.configureEach {
-        if (name == "installDebug") {
-            doLast {
-                exec {
-                    commandLine("adb", "shell", "am", "start", "-n", "com.octarahq.trainflow/.MainActivity")
-                }
-            }
-        }
-    }
-}
+
