@@ -116,7 +116,7 @@
         }
         if (!window.tileStatus[key]) {
           window.tileStatus[key] = true;
-          var url = 'https://a.basemaps.cartocdn.com/dark_all/' + z + '/' + x + '/' + y + '.png';
+          var url = 'https://a.tile.openstreetmap.fr/osmfr/' + z + '/' + x + '/' + y + '.png';
           fetch(url)
             .then(function(res) { return res.arrayBuffer(); })
             .then(function(buf) {
@@ -140,10 +140,10 @@
             attributionControl: false
           });
 
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            maxZoom: 19,
-            subdomains: 'abcd',
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
+          L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', {
+            maxZoom: 22,
+            maxNativeZoom: 19,
+            attribution: '&copy; OpenStreetMap France'
           }).addTo(this.map);
         },
         setView: function(lat, lon, zoom) {
