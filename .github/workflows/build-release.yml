@@ -137,6 +137,7 @@ jobs:
           cp server.js deploy_out/
           cp package.json deploy_out/
           cp orion.config.json deploy_out/
+          cp -r .orion deploy_out/
           cd deploy_out
           orion deploy
         env:

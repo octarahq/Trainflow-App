@@ -6,7 +6,6 @@
             ".git",
             ".gradle",
             ".idea",
-            "/build",
             "gradle",
             "/app/src",
             "app/build/classes",
